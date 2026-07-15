@@ -22,12 +22,19 @@ interface Capabilities {
   temp_increments: number[]; meat_probes: number; has_lights: boolean;
 }
 interface ScanDevice { name: string; rssi: number; }
+interface PelletState {
+  capacityLbs: number;
+  feedRateLbsPerHr: number;
+  augerSeconds: number;
+  refilledAt: number;
+}
 interface Settings {
   setpoint: number;
   probeTargets: Record<number, number>;
   probeLabels?: Record<number, string>;
   grillName: string;
   grillModel: string;
+  pellets?: PelletState;
 }
 interface Sample {
   t: number;
@@ -35,6 +42,7 @@ interface Sample {
   grillSetTemp: number | null;
   p1Temp: number | null; p2Temp: number | null;
   p3Temp: number | null; p4Temp: number | null;
+  auger?: boolean; fan?: boolean; igniter?: boolean;  // component activity
 }
 interface CookMeta {
   id: string; startedAt: number; endedAt: number | null;
@@ -131,6 +139,14 @@ let viewCookId: string | null = null;
 let viewSamples: Sample[] = [];        // populated when viewing a past cook
 const MAX_LIVE_SAMPLES = 4320;          // ~6h at one point per 5s
 let lastSampleT = 0;
+// OR-latch component activity between 5s samples so brief auger pulses register.
+let augerSeen = false, fanSeen = false, igniterSeen = false;
+
+// Estimated pellet level from cumulative auger run-time. Defaults are rough and
+// tunable in settings.json; the user recalibrates by tapping "Refilled".
+const pellets: PelletState = { capacityLbs: 20, feedRateLbsPerHr: 8, augerSeconds: 0, refilledAt: 0 };
+let lastAugerTickT = 0;      // for integrating auger-on time between state events
+let lastPelletSaveT = 0;     // throttle persistence of augerSeconds
 
 const unit = () => (state.isFahrenheit === false ? '°C' : '°F');
 
@@ -223,45 +239,50 @@ function renderCaps(): void {
     wrap.appendChild(chip);
   }
 
-  // Probe rows. Only probes 1-2 accept a target on this controller (see the
-  // sidecar's set_probe); the rest are read-only temperature monitors.
-  const probes = $('probes');
-  probes.innerHTML = '';
+  // One panel per probe: status + controls together with its own chart. Only
+  // probes 1-2 accept a target on this controller (see the sidecar's set_probe);
+  // the rest are read-only temperature monitors.
+  const panels = $('probePanels');
+  panels.innerHTML = '';
   for (let i = 1; i <= caps.meat_probes; i++) {
     const settable = i <= SETTABLE_PROBES;
-    const row = document.createElement('div');
-    row.className = 'probe-row';
-    row.innerHTML = `
-      <span class="probe-status">
-        <span class="probe-dot off" id="p${i}Dot"></span>
-        <span class="probe-id">
-          <input class="probe-label" id="p${i}Label" placeholder="Probe ${i}"
-                 maxlength="24" value="${esc(probeLabels[i] ?? '')}" />
-          <span class="probe-sub" id="p${i}Sub">Not connected</span>
+    const panel = document.createElement('section');
+    panel.className = 'card probe-panel';
+    panel.id = `pPanel${i}`;
+    panel.innerHTML = `
+      <div class="probe-row probe-head">
+        <span class="probe-status">
+          <span class="probe-dot off" id="p${i}Dot"></span>
+          <span class="probe-id">
+            <input class="probe-label" id="p${i}Label" placeholder="Probe ${i}"
+                   maxlength="24" value="${esc(probeLabels[i] ?? '')}" />
+            <span class="probe-sub" id="p${i}Sub">Not connected</span>
+          </span>
         </span>
-      </span>
-      <span class="probe-temp" id="p${i}Temp">--<span class="pu">${unit()}</span></span>
-      ${settable ? `
-      <span class="probe-target">
-        <input type="number" id="p${i}Target" class="probe-input" placeholder="target"
-               value="${probeTargets[i] ?? ''}" />
-        <button class="probe-set" data-probe="${i}">Set</button>
-        <button class="probe-clear" data-clear="${i}" title="Clear target" aria-label="Clear target">✕</button>
-      </span>` : `<span class="probe-monitor">monitor</span>`}`;
-    probes.appendChild(row);
+        <span class="probe-temp" id="p${i}Temp">--<span class="pu">${unit()}</span></span>
+        ${settable ? `
+        <span class="probe-target">
+          <input type="number" id="p${i}Target" class="probe-input" placeholder="target"
+                 value="${probeTargets[i] ?? ''}" />
+          <button class="probe-set" data-probe="${i}">Set</button>
+          <button class="probe-clear" data-clear="${i}" title="Clear target" aria-label="Clear target">✕</button>
+        </span>` : `<span class="probe-monitor">monitor</span>`}
+      </div>
+      <canvas class="panel-canvas" id="p${i}Chart"></canvas>`;
+    panels.appendChild(panel);
   }
-  probes.querySelectorAll<HTMLButtonElement>('button[data-probe]').forEach((b) => {
+  panels.querySelectorAll<HTMLButtonElement>('button[data-probe]').forEach((b) => {
     b.addEventListener('click', () => setProbeTarget(Number(b.dataset.probe)));
   });
-  probes.querySelectorAll<HTMLButtonElement>('button[data-clear]').forEach((b) => {
+  panels.querySelectorAll<HTMLButtonElement>('button[data-clear]').forEach((b) => {
     b.addEventListener('click', () => clearProbeTarget(Number(b.dataset.clear)));
   });
-  probes.querySelectorAll<HTMLInputElement>('.probe-input').forEach((inp) => {
+  panels.querySelectorAll<HTMLInputElement>('.probe-input').forEach((inp) => {
     inp.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') setProbeTarget(Number(inp.id.replace(/\D/g, '')));
     });
   });
-  probes.querySelectorAll<HTMLInputElement>('.probe-label').forEach((inp) => {
+  panels.querySelectorAll<HTMLInputElement>('.probe-label').forEach((inp) => {
     const save = () => {
       const i = Number(inp.id.replace(/\D/g, ''));
       const v = inp.value.trim();
@@ -317,18 +338,6 @@ const CHART_GROUPS: ChartGroup[] = [
   { id: 'p4', label: 'Probe 4', readKey: 'p4Temp', series: [{ key: 'p4Temp', color: '#e88f5a' }] },
 ];
 
-function groupHasData(g: ChartGroup, samples: Sample[]): boolean {
-  for (const s of samples) for (const ser of g.series) if (s[ser.key] != null) return true;
-  return false;
-}
-function lastValue(samples: Sample[], key: keyof Sample): number | null {
-  for (let i = samples.length - 1; i >= 0; i--) {
-    const v = samples[i][key] as number | null;
-    if (v != null) return v;
-  }
-  return null;
-}
-
 const activeSamples = () => (viewCookId ? viewSamples : liveSamples);
 
 const clock = (t: number) =>
@@ -345,7 +354,11 @@ function pushLiveSample(): void {
     grillSetTemp: state.grillSetTemp ?? null,
     p1Temp: state.p1Temp ?? null, p2Temp: state.p2Temp ?? null,
     p3Temp: state.p3Temp ?? null, p4Temp: state.p4Temp ?? null,
+    auger: augerSeen || !!state.motorState,
+    fan: fanSeen || !!state.fanState,
+    igniter: igniterSeen || !!state.hotState,
   });
+  augerSeen = fanSeen = igniterSeen = false;
   if (liveSamples.length > MAX_LIVE_SAMPLES) liveSamples.shift();
 }
 
@@ -370,7 +383,14 @@ function drawSeriesChart(canvas: HTMLCanvasElement, series: ChartSeries[], sampl
     if (v < vMin) vMin = v;
     if (v > vMax) vMax = v;
   }
-  if (!isFinite(vMin)) return;
+  if (!isFinite(vMin)) {
+    ctx.fillStyle = '#8a7660';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('No data yet', cssW / 2, cssH / 2);
+    ctx.textAlign = 'left';
+    return;
+  }
 
   const padL = 30, padR = 8, padT = 6, padB = 14;
   const plotW = cssW - padL - padR;
@@ -423,60 +443,80 @@ function drawSeriesChart(canvas: HTMLCanvasElement, series: ChartSeries[], sampl
   ctx.fillText(end, cssW - padR - ctx.measureText(end).width, cssH);
 }
 
-// Build/update one mini-chart per source that has data; drop those that don't.
+// Component-activity timeline: on/off bands for the auger, fan and igniter over
+// the same time axis as the temp charts.
+interface ActivityRow { key: keyof Sample; label: string; color: string; }
+const ACTIVITY_ROWS: ActivityRow[] = [
+  { key: 'auger', label: 'Auger', color: '#ff6b1a' },
+  { key: 'fan', label: 'Fan', color: '#5aa9e6' },
+  { key: 'igniter', label: 'Ign', color: '#ffcf4d' },
+];
+
+function drawActivityChart(canvas: HTMLCanvasElement, samples: Sample[]): void {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = canvas.clientWidth || 320;
+  const cssH = canvas.clientHeight || 62;
+  canvas.width = Math.round(cssW * dpr);
+  canvas.height = Math.round(cssH * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssW, cssH);
+  ctx.font = '10px -apple-system, system-ui, sans-serif';
+
+  // Only rows the samples actually carry (older cooks lack these fields).
+  const rows = ACTIVITY_ROWS.filter((r) => samples.some((s) => s[r.key] !== undefined));
+  if (!rows.length) {
+    ctx.fillStyle = '#8a7660';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('No activity data yet', cssW / 2, cssH / 2);
+    ctx.textAlign = 'left';
+    return;
+  }
+
+  const padL = 42, padR = 8, padT = 4, padB = 14;
+  const plotW = cssW - padL - padR;
+  const tMin = samples[0].t;
+  const tMax = samples[samples.length - 1].t;
+  const tSpan = Math.max(1, tMax - tMin);
+  const x = (t: number) => padL + ((t - tMin) / tSpan) * plotW;
+  const rowH = (cssH - padT - padB) / rows.length;
+  const bandH = Math.min(14, rowH - 3);
+
+  rows.forEach((r, idx) => {
+    const yTop = padT + idx * rowH + (rowH - bandH) / 2;
+    ctx.fillStyle = '#a8927c';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(r.label, 4, yTop + bandH / 2);
+    // Faint baseline track, then filled segments where the component was on.
+    ctx.fillStyle = 'rgba(255,255,255,0.05)';
+    ctx.fillRect(padL, yTop, plotW, bandH);
+    ctx.fillStyle = r.color;
+    for (let i = 0; i < samples.length; i++) {
+      if (!samples[i][r.key]) continue;
+      const x0 = x(samples[i].t);
+      const x1 = i + 1 < samples.length ? x(samples[i + 1].t) : x0 + 2;
+      ctx.fillRect(x0, yTop, Math.max(1.5, x1 - x0), bandH);
+    }
+  });
+
+  ctx.fillStyle = '#a8927c';
+  ctx.textBaseline = 'bottom';
+  ctx.fillText(clock(tMin), padL, cssH);
+  const end = clock(tMax);
+  ctx.fillText(end, cssW - padR - ctx.measureText(end).width, cssH);
+}
+
+// Redraw every panel's chart (grill + each probe) and the activity timeline,
+// and update the grill readout. Probe panels with no reading are hidden.
 function renderChart(): void {
   const samples = activeSamples();
-  const container = $('charts');
-  let anyData = false;
-
   for (const g of CHART_GROUPS) {
-    const domId = `chart-${g.id}`;
-    let el = document.getElementById(domId) as HTMLDivElement | null;
-    if (!groupHasData(g, samples)) { if (el) el.remove(); continue; }
-    anyData = true;
-
-    if (!el) {
-      el = document.createElement('div');
-      el.id = domId;
-      el.className = 'mini-chart';
-      el.innerHTML =
-        `<div class="mini-head">` +
-        `<span class="mini-label"><span class="swatch" style="background:${g.series[0].color}"></span>` +
-        `<span class="mini-label-text" id="mini-lbl-${g.id}"></span></span>` +
-        `<span class="mini-val" id="mini-val-${g.id}"></span></div>` +
-        `<canvas class="mini-canvas"></canvas>`;
-    }
-    container.appendChild(el); // (re)append in CHART_GROUPS order
-
-    const lblEl = document.getElementById(`mini-lbl-${g.id}`);
-    if (lblEl) lblEl.textContent = g.id === 'grill' ? 'Grill' : probeLabel(Number(g.id.replace(/\D/g, '')));
-
-    const cur = lastValue(samples, g.readKey);
-    const valEl = document.getElementById(`mini-val-${g.id}`);
-    if (valEl) {
-      let txt = cur != null ? `${cur}${unit()}` : '--';
-      if (g.id === 'grill') {
-        const sv = lastValue(samples, 'grillSetTemp');
-        if (sv != null) txt += `  ·  set ${sv}${unit()}`;
-      }
-      valEl.textContent = txt;
-    }
-    drawSeriesChart(el.querySelector('canvas') as HTMLCanvasElement, g.series, samples);
+    const canvas = document.getElementById(`${g.id}Chart`) as HTMLCanvasElement | null;
+    if (canvas) drawSeriesChart(canvas, g.series, samples);
   }
-
-  // Empty-state note when nothing has data yet.
-  let note = document.getElementById('charts-empty');
-  if (!anyData) {
-    if (!note) {
-      note = document.createElement('div');
-      note.id = 'charts-empty';
-      note.className = 'charts-empty';
-      note.textContent = 'No temperature data yet';
-      container.appendChild(note);
-    }
-  } else if (note) {
-    note.remove();
-  }
+  const activity = document.getElementById('activityChart') as HTMLCanvasElement | null;
+  if (activity) drawActivityChart(activity, samples);
 }
 
 async function refreshCookList(): Promise<CookMeta[]> {
@@ -527,6 +567,48 @@ function grillProbeTarget(i: number): number | null {
   return v;
 }
 
+// Rough "hours of pellets left" from the recent auger duty cycle. Conservative
+// (the 5s auger flags over-count brief pulses, so the estimate runs short).
+function burnHoursLeft(remLbs: number): number | null {
+  if (!state.moduleIsOn) return null;
+  const now = Date.now();
+  const recent = liveSamples.filter((s) => now - s.t <= 15 * 60_000);
+  if (recent.length < 4) return null;
+  const duty = recent.filter((s) => s.auger).length / recent.length;
+  const burnLbsPerHr = pellets.feedRateLbsPerHr * duty;
+  if (burnLbsPerHr < 0.05) return null;
+  return remLbs / burnLbsPerHr;
+}
+
+function fmtDuration(h: number): string {
+  if (h >= 1) {
+    const hh = Math.floor(h);
+    const mm = Math.round((h - hh) * 60);
+    return mm ? `${hh}h ${mm}m` : `${hh}h`;
+  }
+  return `${Math.max(1, Math.round(h * 60))}m`;
+}
+
+function renderPellets(): void {
+  const cap = pellets.capacityLbs || 20;
+  const usedLbs = (pellets.augerSeconds / 3600) * pellets.feedRateLbsPerHr;
+  const remLbs = Math.max(0, cap - usedLbs);
+  const pct = cap > 0 ? Math.max(0, Math.min(100, (remLbs / cap) * 100)) : 0;
+
+  const fill = document.getElementById('pelletFill');
+  if (fill) {
+    fill.style.width = pct.toFixed(0) + '%';
+    fill.className = 'pellet-fill ' + (pct > 40 ? 'ok' : pct > 15 ? 'warn' : 'low');
+  }
+  const sub = document.getElementById('pelletSub');
+  if (sub) {
+    let txt = `~${Math.round(pct)}%  ·  ~${remLbs.toFixed(1)} of ${cap} lb`;
+    const hrs = burnHoursLeft(remLbs);
+    if (hrs != null) txt += `  ·  ~${fmtDuration(hrs)} left`;
+    sub.textContent = txt;
+  }
+}
+
 function renderState(): void {
   $('unit').textContent = unit();
   $('grillTemp').textContent =
@@ -538,6 +620,10 @@ function renderState(): void {
     const tempEl = document.getElementById(`p${i}Temp`);
     if (!tempEl) continue;
     const v = (state as any)[`p${i}Temp`] as number | null;
+    // Hide a read-only monitor probe (3-4) until something is plugged in; the
+    // settable probes (1-2) always keep their panel visible.
+    const panel = document.getElementById(`pPanel${i}`);
+    if (panel) panel.classList.toggle('hidden', i > SETTABLE_PROBES && v == null);
     tempEl.innerHTML = (v != null ? String(v) : '--') + `<span class="pu">${unit()}</span>`;
 
     // Prefer the grill's OWN target (what drives its "IT" alert) over the app's.
@@ -588,6 +674,8 @@ function renderState(): void {
   if (!priming) {
     $('primeBtn').classList.toggle('active', !!state.primeState);
   }
+
+  renderPellets();
 }
 
 // ---- event wiring ----------------------------------------------------------
@@ -614,6 +702,14 @@ function wireControls(): void {
   $('primeBtn').addEventListener('click', () => { void primeBurst(); });
   $('refreshBtn').addEventListener('click', () =>
     run('Refreshed', window.pitboss.refresh()));
+
+  $('refillBtn').addEventListener('click', () => {
+    pellets.augerSeconds = 0;
+    pellets.refilledAt = Date.now();
+    persist({ pellets });
+    renderPellets();
+    toast('Hopper refilled — pellet estimate reset to full');
+  });
 }
 
 // Prime is a momentary motor run: on, then off after a few seconds. Give
@@ -689,6 +785,19 @@ function handleEvent(evt: SidecarEvent): void {
         setTempValue = state.grillSetTemp;
         renderSetpoint();
       }
+      // Latch component activity so a brief auger pulse between samples still
+      // shows on the activity graph.
+      if (state.motorState) augerSeen = true;
+      if (state.fanState) fanSeen = true;
+      if (state.hotState) igniterSeen = true;
+
+      // Integrate auger run-time for the pellet estimate; persist periodically.
+      const nowT = Date.now();
+      if (lastAugerTickT && state.motorState) {
+        pellets.augerSeconds += Math.min(nowT - lastAugerTickT, 10_000) / 1000;
+      }
+      lastAugerTickT = nowT;
+      if (nowT - lastPelletSaveT > 15_000) { lastPelletSaveT = nowT; persist({ pellets }); }
       // A fresh power-on starts a new cook — clear the live curve so cooks
       // don't visually run together within one app session.
       if (state.moduleIsOn && !wasOn) { liveSamples = []; lastSampleT = 0; }
@@ -720,6 +829,7 @@ async function boot(): Promise<void> {
       Object.assign(probeTargets, s.probeTargets);
     }
     if (s.probeLabels) Object.assign(probeLabels, s.probeLabels);
+    if (s.pellets) Object.assign(pellets, s.pellets);
     if (s.grillName) grillName = s.grillName;
     if (s.grillModel) grillModel = s.grillModel;
   } catch { /* defaults are fine */ }

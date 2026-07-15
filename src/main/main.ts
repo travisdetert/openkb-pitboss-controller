@@ -32,12 +32,13 @@ function toggleWindow(): void {
 function createWindow(): void {
   const bounds = store?.get().windowBounds;
   win = new BrowserWindow({
-    width: bounds?.width ?? 480,
+    width: bounds?.width ?? 600,
     height: bounds?.height ?? 860,
     x: bounds?.x,
     y: bounds?.y,
-    minWidth: 380,
-    minHeight: 560,
+    minWidth: 560,
+    minHeight: 640,
+    maxWidth: 820,
     title: 'Pit Boss',
     icon: ICON_PATH,           // window/taskbar icon (Windows/Linux)
     backgroundColor: '#16110d',

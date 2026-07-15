@@ -25,52 +25,53 @@
     </button>
   </header>
 
+  <!-- Global grill actions, always at the top -->
+  <div class="toolbar" id="toolbar">
+    <button id="offBtn" class="btn btn-danger" disabled>Turn Off</button>
+    <button id="lightBtn" class="btn btn-ghost hidden">Light</button>
+    <button id="primeBtn" class="btn btn-ghost">Prime</button>
+    <button id="refreshBtn" class="btn btn-ghost">Refresh</button>
+  </div>
+
   <main id="app">
     <!-- Fault alert (only shown when the controller reports an error) -->
     <div id="errBanner" class="err-banner hidden"></div>
 
-    <!-- Grill temperature -->
+    <!-- Grill panel: controls + its own history chart + component activity -->
     <section class="card grill-card">
       <div class="card-head">
         <span class="card-title">Grill</span>
-        <span id="grillSetLabel" class="set-label">— —</span>
+        <select id="cookSelect" class="cook-select" title="View a past cook">
+          <option value="">● Live</option>
+        </select>
       </div>
       <div class="bigtemp">
         <span id="grillTemp" class="bigtemp-value">--</span>
         <span class="bigtemp-unit" id="unit">°F</span>
       </div>
+      <div class="set-line"><span id="grillSetLabel" class="set-label">— —</span></div>
 
       <div class="target-caption">Target °F</div>
       <div id="presets" class="presets"></div>
 
-      <div class="grill-actions">
-        <div class="action-row">
-          <button id="offBtn" class="btn btn-danger" disabled>Turn Off</button>
+      <div class="pellet-gauge">
+        <div class="pellet-head">
+          <span class="pellet-label">Pellets <span class="pellet-note">est.</span></span>
+          <button id="refillBtn" class="pellet-refill" title="Reset the estimate — tap after filling the hopper">Refilled</button>
         </div>
-        <div class="action-row action-row-secondary">
-          <button id="lightBtn" class="btn btn-ghost hidden">Light</button>
-          <button id="primeBtn" class="btn btn-ghost">Prime</button>
-          <button id="refreshBtn" class="btn btn-ghost">Refresh</button>
-        </div>
+        <div class="pellet-bar"><div class="pellet-fill ok" id="pelletFill"></div></div>
+        <div class="pellet-sub" id="pelletSub">~-- %</div>
+      </div>
+
+      <canvas id="grillChart" class="panel-canvas"></canvas>
+      <div class="activity-wrap">
+        <div class="activity-title">Component activity</div>
+        <canvas id="activityChart" class="activity-canvas"></canvas>
       </div>
     </section>
 
-    <!-- Meat probes -->
-    <section class="card" id="probesCard">
-      <div class="card-head"><span class="card-title">Meat Probes</span></div>
-      <div id="probes"></div>
-    </section>
-
-    <!-- Temperature history -->
-    <section class="card graph-card">
-      <div class="card-head">
-        <span class="card-title">History</span>
-        <select id="cookSelect" class="cook-select" title="View a past cook">
-          <option value="">● Live</option>
-        </select>
-      </div>
-      <div id="charts" class="charts"></div>
-    </section>
+    <!-- One panel per probe (status + controls + its own chart), built by JS -->
+    <div id="probePanels"></div>
 
   </main>
 

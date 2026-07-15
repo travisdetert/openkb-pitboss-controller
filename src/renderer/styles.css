@@ -24,6 +24,7 @@ html, body {
   -webkit-font-smoothing: antialiased;
   user-select: none;
 }
+body { display: flex; flex-direction: column; }
 
 /* Top bar */
 .topbar {
@@ -71,17 +72,53 @@ html, body {
 .conn-pill[data-state="disconnected"] .dot { background: var(--danger); }
 @keyframes pulse { 50% { opacity: 0.3; } }
 
+.topbar { flex: none; }
 main {
+  flex: 1 1 auto;
+  min-height: 0;
   padding: 14px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 12px;
   overflow-y: auto;
-  height: calc(100vh - 53px);
 }
-/* Keep the content a centered column that doesn't over-stretch on wide windows. */
-main > * { width: 100%; max-width: 560px; }
+/* Centered content column; the window's max-width keeps it from over-stretching. */
+main > * { width: 100%; max-width: 760px; }
+
+/* Global action toolbar under the header */
+.toolbar {
+  flex: none;
+  display: flex;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  width: 100%;
+  max-width: 788px;
+  margin: 0 auto;
+}
+.toolbar .btn { padding: 8px 10px; }
+
+/* Pellet gauge */
+.pellet-gauge { margin-bottom: 14px; }
+.pellet-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; }
+.pellet-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; }
+.pellet-note { text-transform: none; letter-spacing: 0; font-style: italic; opacity: 0.8; }
+.pellet-refill {
+  -webkit-app-region: no-drag;
+  background: var(--bg-card2); border: 1px solid var(--border); color: var(--text);
+  border-radius: 7px; padding: 4px 10px; font-size: 12px; cursor: pointer;
+}
+.pellet-refill:hover { border-color: var(--flame-dim); }
+.pellet-bar {
+  height: 12px; border-radius: 7px; overflow: hidden;
+  background: var(--bg-card2); border: 1px solid var(--border);
+}
+.pellet-fill { height: 100%; width: 0; border-radius: 7px 0 0 7px; transition: width 0.4s ease; }
+.pellet-fill.ok   { background: var(--ok); }
+.pellet-fill.warn { background: var(--warn); }
+.pellet-fill.low  { background: var(--danger); }
+.pellet-sub { margin-top: 5px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
 .card {
   background: var(--bg-card);
@@ -140,9 +177,6 @@ main > * { width: 100%; max-width: 560px; }
 .chip:hover { border-color: var(--flame-dim); }
 .chip.active { background: var(--flame); border-color: var(--flame); color: #1a1208; font-weight: 700; }
 
-.grill-actions { display: flex; flex-direction: column; gap: 8px; }
-.action-row { display: flex; gap: 8px; }
-.action-row-secondary .btn { padding: 8px; font-size: 12px; border-radius: 8px; }
 .btn {
   flex: 1;
   padding: 10px;
@@ -258,7 +292,18 @@ main > * { width: 100%; max-width: 560px; }
 .probe-clear:hover { color: var(--danger); border-color: var(--danger); }
 .probe-monitor { font-size: 11px; color: var(--muted); font-style: italic; flex: none; }
 
-/* Temperature history graph */
+/* Per-source panels: grill (controls + chart + activity) and one per probe */
+#probePanels { display: flex; flex-direction: column; gap: 12px; }
+.set-line { text-align: center; margin: -2px 0 10px; }
+.probe-panel .probe-row.probe-head { padding: 0 0 2px; border-bottom: none; }
+.panel-canvas { display: block; width: 100%; height: 84px; margin-top: 10px; }
+.activity-wrap { margin-top: 12px; }
+.activity-title {
+  font-size: 11px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px;
+}
+.activity-canvas { display: block; width: 100%; height: 62px; }
+
 .cook-select {
   -webkit-app-region: no-drag;
   background: var(--bg-card2);
@@ -271,20 +316,6 @@ main > * { width: 100%; max-width: 560px; }
   max-width: 180px;
 }
 .cook-select:focus { outline: none; border-color: var(--flame-dim); }
-/* One stacked mini-chart per source (grill + each connected probe). */
-.charts { display: flex; flex-direction: column; gap: 12px; }
-.mini-head {
-  display: flex; align-items: baseline; justify-content: space-between;
-  gap: 8px; margin-bottom: 2px;
-}
-.mini-label { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--text); min-width: 0; }
-.mini-label .swatch { width: 12px; height: 3px; border-radius: 2px; flex: none; }
-.mini-label-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mini-val { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; flex: none; }
-.mini-canvas { display: block; width: 100%; height: 72px; }
-.charts-empty { text-align: center; color: var(--muted); font-size: 13px; padding: 24px 0; }
-
-/* Slim button strip (not a full card) — keeps secondary actions compact. */
 
 .toast {
   position: fixed;
@@ -301,4 +332,4 @@ main > * { width: 100%; max-width: 560px; }
 .toast.err { border-color: var(--danger); color: var(--danger); }
 .hidden { display: none !important; }
 
-main.disconnected .card:not(.grill-card):not(.graph-card) { opacity: 0.5; }
+main.disconnected .card:not(.grill-card) { opacity: 0.5; }
