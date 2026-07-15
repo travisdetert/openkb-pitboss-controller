@@ -25,6 +25,7 @@ interface ScanDevice { name: string; rssi: number; }
 interface Settings {
   setpoint: number;
   probeTargets: Record<number, number>;
+  probeLabels?: Record<number, string>;
   grillName: string;
   grillModel: string;
 }
@@ -81,6 +82,45 @@ let setTempValue = 225;       // pending setpoint shown in the stepper
 // into it (so we don't fight their edit); reset on each fresh connect.
 let userSetTarget = false;
 const probeTargets: Record<number, number> = { 1: 145, 2: 165 };
+// The controller can hold a target only for the first two probes (the sidecar's
+// set_probe rejects the rest); probes beyond this are read-only monitors.
+const SETTABLE_PROBES = 2;
+// Optional user labels per probe ("Chicken", "Pork Shoulder"), persisted and
+// snapshotted into each recorded cook so past sessions show what was cooking.
+const probeLabels: Record<number, string> = {};
+
+// Escape user text before it goes into an innerHTML attribute value.
+function esc(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// Display name for a probe: its custom label, else "Probe N".
+function probeLabel(i: number): string {
+  return probeLabels[i]?.trim() || `Probe ${i}`;
+}
+
+// Set a probe's target: remember it, persist, and push to the grill (1-2 only).
+function setProbeTarget(probe: number): void {
+  const input = document.getElementById(`p${probe}Target`) as HTMLInputElement | null;
+  if (!input) return;
+  const val = Number(input.value);
+  if (!input.value.trim() || !Number.isFinite(val)) return toast('Enter a probe target', true);
+  probeTargets[probe] = val;
+  persist({ probeTargets });
+  renderState();
+  run(`${probeLabel(probe)} → ${val}${unit()}`, window.pitboss.setProbe(probe, val));
+}
+
+// Remove a probe's target — forgets it locally (stops the app's reached-target
+// alert). The grill keeps its own IT target until changed on the controller.
+function clearProbeTarget(probe: number): void {
+  delete probeTargets[probe];
+  persist({ probeTargets });
+  const input = document.getElementById(`p${probe}Target`) as HTMLInputElement | null;
+  if (input) input.value = '';
+  renderState();
+  toast(`${probeLabel(probe)} target cleared`);
+}
 let grillName = 'PBL-';
 let grillModel = 'PB1100PSC3';
 
@@ -146,7 +186,7 @@ function renderConnection(): void {
 
   // Enable/disable controls.
   const enable = connected;
-  ['setBtn', 'offBtn', 'lightBtn', 'primeBtn', 'refreshBtn']
+  ['offBtn', 'lightBtn', 'primeBtn', 'refreshBtn']
     .forEach((id) => {
       const el = document.getElementById(id) as HTMLButtonElement | null;
       if (el) el.disabled = !enable;
@@ -174,38 +214,62 @@ function renderCaps(): void {
     chip.className = 'chip';
     chip.textContent = String(t);
     chip.dataset.temp = String(t);
-    chip.addEventListener('click', () => { setTempValue = t; userEditSetpoint(); });
+    // Tapping a preset sets the grill immediately — no separate confirm button.
+    chip.addEventListener('click', () => {
+      setTempValue = t;
+      userEditSetpoint();
+      run(`Grill → ${t}${unit()}`, window.pitboss.setTemp(t));
+    });
     wrap.appendChild(chip);
   }
 
-  // Probe rows.
+  // Probe rows. Only probes 1-2 accept a target on this controller (see the
+  // sidecar's set_probe); the rest are read-only temperature monitors.
   const probes = $('probes');
   probes.innerHTML = '';
   for (let i = 1; i <= caps.meat_probes; i++) {
+    const settable = i <= SETTABLE_PROBES;
     const row = document.createElement('div');
     row.className = 'probe-row';
     row.innerHTML = `
-      <span class="probe-id">
-        <span class="probe-name">Probe ${i}</span>
-        <span class="probe-grill" id="p${i}Grill"></span>
+      <span class="probe-status">
+        <span class="probe-dot off" id="p${i}Dot"></span>
+        <span class="probe-id">
+          <input class="probe-label" id="p${i}Label" placeholder="Probe ${i}"
+                 maxlength="24" value="${esc(probeLabels[i] ?? '')}" />
+          <span class="probe-sub" id="p${i}Sub">Not connected</span>
+        </span>
       </span>
       <span class="probe-temp" id="p${i}Temp">--<span class="pu">${unit()}</span></span>
+      ${settable ? `
       <span class="probe-target">
-        <input type="number" id="p${i}Target" value="${probeTargets[i] ?? ''}" />
-        <button data-probe="${i}">Set</button>
-      </span>`;
+        <input type="number" id="p${i}Target" class="probe-input" placeholder="target"
+               value="${probeTargets[i] ?? ''}" />
+        <button class="probe-set" data-probe="${i}">Set</button>
+        <button class="probe-clear" data-clear="${i}" title="Clear target" aria-label="Clear target">✕</button>
+      </span>` : `<span class="probe-monitor">monitor</span>`}`;
     probes.appendChild(row);
   }
   probes.querySelectorAll<HTMLButtonElement>('button[data-probe]').forEach((b) => {
-    b.addEventListener('click', () => {
-      const probe = Number(b.dataset.probe);
-      const input = $(`p${probe}Target`) as HTMLInputElement;
-      const val = Number(input.value);
-      if (!Number.isFinite(val)) return toast('Enter a probe target', true);
-      probeTargets[probe] = val;
-      persist({ probeTargets });
-      run(`Probe ${probe} → ${val}${unit()}`, window.pitboss.setProbe(probe, val));
+    b.addEventListener('click', () => setProbeTarget(Number(b.dataset.probe)));
+  });
+  probes.querySelectorAll<HTMLButtonElement>('button[data-clear]').forEach((b) => {
+    b.addEventListener('click', () => clearProbeTarget(Number(b.dataset.clear)));
+  });
+  probes.querySelectorAll<HTMLInputElement>('.probe-input').forEach((inp) => {
+    inp.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') setProbeTarget(Number(inp.id.replace(/\D/g, '')));
     });
+  });
+  probes.querySelectorAll<HTMLInputElement>('.probe-label').forEach((inp) => {
+    const save = () => {
+      const i = Number(inp.id.replace(/\D/g, ''));
+      const v = inp.value.trim();
+      if (v) probeLabels[i] = v; else delete probeLabels[i];
+      persist({ probeLabels });
+      renderChart();           // reflect the new name in the chart headers
+    };
+    inp.addEventListener('change', save);
   });
 
   // Light only if the model actually has a controllable light.
@@ -240,15 +304,30 @@ function led(id: string, on: boolean, hot = false): void {
 }
 
 // ---- temperature chart -----------------------------------------------------
-interface Series { key: keyof Sample; label: string; color: string; dash?: number[]; }
-const SERIES: Series[] = [
-  { key: 'grillTemp', label: 'Grill', color: '#ff6b1a' },
-  { key: 'grillSetTemp', label: 'Set', color: '#ffcf4d', dash: [4, 4] },
-  { key: 'p1Temp', label: 'Probe 1', color: '#5aa9e6' },
-  { key: 'p2Temp', label: 'Probe 2', color: '#4ccf6a' },
-  { key: 'p3Temp', label: 'Probe 3', color: '#c98be0' },
-  { key: 'p4Temp', label: 'Probe 4', color: '#e88f5a' },
+interface ChartSeries { key: keyof Sample; color: string; dash?: number[]; }
+interface ChartGroup { id: string; label: string; readKey: keyof Sample; series: ChartSeries[]; }
+// One chart per source: the grill (with its dashed setpoint) and each probe.
+const CHART_GROUPS: ChartGroup[] = [
+  { id: 'grill', label: 'Grill', readKey: 'grillTemp', series: [
+      { key: 'grillTemp', color: '#ff6b1a' },
+      { key: 'grillSetTemp', color: '#ffcf4d', dash: [4, 4] } ] },
+  { id: 'p1', label: 'Probe 1', readKey: 'p1Temp', series: [{ key: 'p1Temp', color: '#5aa9e6' }] },
+  { id: 'p2', label: 'Probe 2', readKey: 'p2Temp', series: [{ key: 'p2Temp', color: '#4ccf6a' }] },
+  { id: 'p3', label: 'Probe 3', readKey: 'p3Temp', series: [{ key: 'p3Temp', color: '#c98be0' }] },
+  { id: 'p4', label: 'Probe 4', readKey: 'p4Temp', series: [{ key: 'p4Temp', color: '#e88f5a' }] },
 ];
+
+function groupHasData(g: ChartGroup, samples: Sample[]): boolean {
+  for (const s of samples) for (const ser of g.series) if (s[ser.key] != null) return true;
+  return false;
+}
+function lastValue(samples: Sample[], key: keyof Sample): number | null {
+  for (let i = samples.length - 1; i >= 0; i--) {
+    const v = samples[i][key] as number | null;
+    if (v != null) return v;
+  }
+  return null;
+}
 
 const activeSamples = () => (viewCookId ? viewSamples : liveSamples);
 
@@ -270,39 +349,33 @@ function pushLiveSample(): void {
   if (liveSamples.length > MAX_LIVE_SAMPLES) liveSamples.shift();
 }
 
-function drawChart(): void {
-  const canvas = $('chart') as HTMLCanvasElement;
+// Draw one source's series into its own canvas, auto-scaled to just that data
+// so a 140° probe and a 250° grill each use the full height.
+function drawSeriesChart(canvas: HTMLCanvasElement, series: ChartSeries[], samples: Sample[]): void {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
   const dpr = window.devicePixelRatio || 1;
-  const cssW = canvas.clientWidth || 360;
-  const cssH = canvas.clientHeight || 150;
+  const cssW = canvas.clientWidth || 320;
+  const cssH = canvas.clientHeight || 72;
   canvas.width = Math.round(cssW * dpr);
   canvas.height = Math.round(cssH * dpr);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, cssW, cssH);
   ctx.font = '10px -apple-system, system-ui, sans-serif';
 
-  const samples = activeSamples();
   let vMin = Infinity, vMax = -Infinity;
-  for (const s of samples) for (const ser of SERIES) {
+  for (const s of samples) for (const ser of series) {
     const v = s[ser.key] as number | null;
     if (v == null) continue;
     if (v < vMin) vMin = v;
     if (v > vMax) vMax = v;
   }
-  if (!isFinite(vMin)) {
-    ctx.fillStyle = '#a8927c';
-    ctx.textAlign = 'center';
-    ctx.fillText('No temperature data yet', cssW / 2, cssH / 2);
-    ctx.textAlign = 'left';
-    return;
-  }
+  if (!isFinite(vMin)) return;
 
-  const padL = 30, padR = 8, padT = 8, padB = 16;
+  const padL = 30, padR = 8, padT = 6, padB = 14;
   const plotW = cssW - padL - padR;
   const plotH = cssH - padT - padB;
-  const range = Math.max(10, (vMax - vMin) * 0.12);
+  const range = Math.max(6, (vMax - vMin) * 0.12);
   vMin = Math.floor((vMin - range) / 10) * 10;
   vMax = Math.ceil((vMax + range) / 10) * 10;
   if (vMax === vMin) vMax += 10;
@@ -313,11 +386,11 @@ function drawChart(): void {
   const x = (t: number) => padL + ((t - tMin) / tSpan) * plotW;
   const y = (v: number) => padT + (1 - (v - vMin) / (vMax - vMin)) * plotH;
 
-  // Horizontal gridlines + y-axis labels.
+  // Horizontal gridlines + y-axis labels (few, since each chart is short).
   ctx.strokeStyle = 'rgba(255,255,255,0.06)';
   ctx.fillStyle = '#a8927c';
   ctx.textBaseline = 'middle';
-  const ticks = 4;
+  const ticks = 2;
   for (let i = 0; i <= ticks; i++) {
     const v = vMin + (i / ticks) * (vMax - vMin);
     const yy = y(v);
@@ -327,7 +400,7 @@ function drawChart(): void {
 
   // Series lines (gaps where a probe was unplugged).
   ctx.lineWidth = 1.5;
-  for (const ser of SERIES) {
+  for (const ser of series) {
     ctx.beginPath();
     ctx.strokeStyle = ser.color;
     ctx.setLineDash(ser.dash || []);
@@ -350,24 +423,61 @@ function drawChart(): void {
   ctx.fillText(end, cssW - padR - ctx.measureText(end).width, cssH);
 }
 
-function renderLegend(): void {
+// Build/update one mini-chart per source that has data; drop those that don't.
+function renderChart(): void {
   const samples = activeSamples();
-  const present = new Set<string>();
-  for (const s of samples) for (const ser of SERIES) {
-    if ((s[ser.key] as number | null) != null) present.add(ser.key as string);
+  const container = $('charts');
+  let anyData = false;
+
+  for (const g of CHART_GROUPS) {
+    const domId = `chart-${g.id}`;
+    let el = document.getElementById(domId) as HTMLDivElement | null;
+    if (!groupHasData(g, samples)) { if (el) el.remove(); continue; }
+    anyData = true;
+
+    if (!el) {
+      el = document.createElement('div');
+      el.id = domId;
+      el.className = 'mini-chart';
+      el.innerHTML =
+        `<div class="mini-head">` +
+        `<span class="mini-label"><span class="swatch" style="background:${g.series[0].color}"></span>` +
+        `<span class="mini-label-text" id="mini-lbl-${g.id}"></span></span>` +
+        `<span class="mini-val" id="mini-val-${g.id}"></span></div>` +
+        `<canvas class="mini-canvas"></canvas>`;
+    }
+    container.appendChild(el); // (re)append in CHART_GROUPS order
+
+    const lblEl = document.getElementById(`mini-lbl-${g.id}`);
+    if (lblEl) lblEl.textContent = g.id === 'grill' ? 'Grill' : probeLabel(Number(g.id.replace(/\D/g, '')));
+
+    const cur = lastValue(samples, g.readKey);
+    const valEl = document.getElementById(`mini-val-${g.id}`);
+    if (valEl) {
+      let txt = cur != null ? `${cur}${unit()}` : '--';
+      if (g.id === 'grill') {
+        const sv = lastValue(samples, 'grillSetTemp');
+        if (sv != null) txt += `  ·  set ${sv}${unit()}`;
+      }
+      valEl.textContent = txt;
+    }
+    drawSeriesChart(el.querySelector('canvas') as HTMLCanvasElement, g.series, samples);
   }
-  const wrap = $('chartLegend');
-  wrap.innerHTML = '';
-  for (const ser of SERIES) {
-    if (!present.has(ser.key as string)) continue;
-    const k = document.createElement('span');
-    k.className = 'key';
-    k.innerHTML = `<span class="swatch" style="background:${ser.color}"></span>${ser.label}`;
-    wrap.appendChild(k);
+
+  // Empty-state note when nothing has data yet.
+  let note = document.getElementById('charts-empty');
+  if (!anyData) {
+    if (!note) {
+      note = document.createElement('div');
+      note.id = 'charts-empty';
+      note.className = 'charts-empty';
+      note.textContent = 'No temperature data yet';
+      container.appendChild(note);
+    }
+  } else if (note) {
+    note.remove();
   }
 }
-
-function renderChart(): void { drawChart(); renderLegend(); }
 
 async function refreshCookList(): Promise<CookMeta[]> {
   let cooks: CookMeta[] = [];
@@ -425,17 +535,26 @@ function renderState(): void {
     state.grillSetTemp != null ? `set ${state.grillSetTemp}${unit()}` : '— —';
 
   for (let i = 1; i <= 4; i++) {
-    const el = document.getElementById(`p${i}Temp`);
-    if (!el) continue;
+    const tempEl = document.getElementById(`p${i}Temp`);
+    if (!tempEl) continue;
     const v = (state as any)[`p${i}Temp`] as number | null;
-    el.innerHTML = (v != null ? String(v) : '--') + `<span class="pu">${unit()}</span>`;
+    tempEl.innerHTML = (v != null ? String(v) : '--') + `<span class="pu">${unit()}</span>`;
 
-    // Show the grill's OWN probe target (what drives its "IT" alert), which can
-    // differ from the value you typed. Highlight when the reading hits it.
-    const gt = grillProbeTarget(i);
-    const grillEl = document.getElementById(`p${i}Grill`);
-    if (grillEl) grillEl.textContent = gt != null ? `target ${gt}${unit()}` : '';
-    el.classList.toggle('reached', v != null && gt != null && v >= gt);
+    // Prefer the grill's OWN target (what drives its "IT" alert) over the app's.
+    const target = grillProbeTarget(i) ?? probeTargets[i] ?? null;
+    const reached = v != null && target != null && v >= target;
+    tempEl.classList.toggle('reached', reached);
+
+    // Status dot + subline: unplugged / monitoring / counting down / at target.
+    let cls: string, text: string;
+    if (v == null) { cls = 'off'; text = 'Not connected'; }
+    else if (target == null) { cls = 'ok'; text = 'Monitoring'; }
+    else if (reached) { cls = 'done'; text = `At target ${target}${unit()} ✓`; }
+    else { cls = 'warn'; text = `${target - v}° to go · target ${target}${unit()}`; }
+    const dot = document.getElementById(`p${i}Dot`);
+    const sub = document.getElementById(`p${i}Sub`);
+    if (dot) dot.className = 'probe-dot ' + cls;
+    if (sub) sub.textContent = text;
   }
 
   led('ledFan', !!state.fanState);
@@ -485,9 +604,6 @@ function wireControls(): void {
       window.pitboss.connect(grillName, grillModel).catch(() => { /* status events surface it */ });
     }
   });
-
-  $('setBtn').addEventListener('click', () =>
-    run(`Grill → ${setTempValue}${unit()}`, window.pitboss.setTemp(setTempValue)));
 
   $('offBtn').addEventListener('click', () => {
     if (confirm('Turn the grill off?')) run('Turning off', window.pitboss.off());
@@ -597,7 +713,13 @@ async function boot(): Promise<void> {
   try {
     const s = await window.pitboss.getSettings();
     if (typeof s.setpoint === 'number') setTempValue = s.setpoint;
-    if (s.probeTargets) Object.assign(probeTargets, s.probeTargets);
+    // Replace (not merge) so a target/label the user cleared doesn't reappear
+    // from our built-in defaults.
+    if (s.probeTargets) {
+      for (const k of Object.keys(probeTargets)) delete probeTargets[+k];
+      Object.assign(probeTargets, s.probeTargets);
+    }
+    if (s.probeLabels) Object.assign(probeLabels, s.probeLabels);
     if (s.grillName) grillName = s.grillName;
     if (s.grillModel) grillModel = s.grillModel;
   } catch { /* defaults are fine */ }

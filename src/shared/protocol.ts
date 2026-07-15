@@ -82,6 +82,7 @@ export type GrillCommand =
 export interface Settings {
   setpoint: number;
   probeTargets: Record<number, number>;
+  probeLabels?: Record<number, string>;   // user names per probe ("Chicken", …)
   grillName: string;
   grillModel: string;
   windowBounds?: { x?: number; y?: number; width: number; height: number };
@@ -105,6 +106,7 @@ export interface CookMeta {
   endedAt: number | null;       // null while still running
   samples: number;              // sample count
   device?: string;
+  labels?: Record<number, string>;  // probe names captured at cook start
 }
 
 // Channel names for IPC between main and renderer.

@@ -33,7 +33,7 @@ function createWindow(): void {
   const bounds = store?.get().windowBounds;
   win = new BrowserWindow({
     width: bounds?.width ?? 480,
-    height: bounds?.height ?? 760,
+    height: bounds?.height ?? 860,
     x: bounds?.x,
     y: bounds?.y,
     minWidth: 380,

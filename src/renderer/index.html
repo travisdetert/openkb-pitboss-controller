@@ -45,7 +45,6 @@
 
       <div class="grill-actions">
         <div class="action-row">
-          <button id="setBtn" class="btn btn-primary" disabled>Set Temperature</button>
           <button id="offBtn" class="btn btn-danger" disabled>Turn Off</button>
         </div>
         <div class="action-row action-row-secondary">
@@ -56,6 +55,12 @@
       </div>
     </section>
 
+    <!-- Meat probes -->
+    <section class="card" id="probesCard">
+      <div class="card-head"><span class="card-title">Meat Probes</span></div>
+      <div id="probes"></div>
+    </section>
+
     <!-- Temperature history -->
     <section class="card graph-card">
       <div class="card-head">
@@ -64,14 +69,7 @@
           <option value="">● Live</option>
         </select>
       </div>
-      <canvas id="chart" class="chart"></canvas>
-      <div id="chartLegend" class="legend"></div>
-    </section>
-
-    <!-- Meat probes -->
-    <section class="card" id="probesCard">
-      <div class="card-head"><span class="card-title">Meat Probes</span></div>
-      <div id="probes"></div>
+      <div id="charts" class="charts"></div>
     </section>
 
   </main>
