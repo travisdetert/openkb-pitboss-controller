@@ -51,12 +51,10 @@ export class SettingsStore {
 
     try {
       const parsed = JSON.parse(raw) as Partial<Settings>;
-      // Shallow-merge over defaults so new fields appear without wiping old ones.
-      return {
-        ...DEFAULTS,
-        ...parsed,
-        probeTargets: { ...DEFAULTS.probeTargets, ...(parsed.probeTargets || {}) },
-      };
+      // Fill in defaults for missing top-level fields, but treat the stored maps
+      // (probeTargets/probeLabels) as authoritative — a per-key merge with the
+      // defaults would resurrect a target the user deliberately cleared.
+      return { ...DEFAULTS, ...parsed };
     } catch (e) {
       // Preserve the unparseable file (a hand-edit typo, say) instead of
       // overwriting it — losing a user's edit silently is the worse failure.
@@ -76,11 +74,11 @@ export class SettingsStore {
 
   /** Merge a partial patch, persist (debounced), and return the new settings. */
   set(patch: Partial<Settings>): Settings {
-    this.data = {
-      ...this.data,
-      ...patch,
-      probeTargets: { ...this.data.probeTargets, ...(patch.probeTargets || {}) },
-    };
+    this.data = { ...this.data, ...patch };
+    // The renderer always sends the complete probeTargets/probeLabels map, so a
+    // provided map replaces wholesale — that's what lets a cleared entry vanish.
+    if (patch.probeTargets) this.data.probeTargets = { ...patch.probeTargets };
+    if (patch.probeLabels) this.data.probeLabels = { ...patch.probeLabels };
     this.scheduleWrite();
     return this.data;
   }
