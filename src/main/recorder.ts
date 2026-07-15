@@ -16,6 +16,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { CookMeta, GrillState, Sample } from '../shared/protocol';
 import { SettingsStore } from './store';
+import { classifyThermal, TempPoint, THERMAL } from './thermal';
 import { log } from './log';
 
 const SAMPLE_INTERVAL_MS = 5_000;   // at most one recorded point per 5s
@@ -49,6 +50,15 @@ export class Recorder {
   private pelletsFired = false;
   private errorFired = false;
 
+  // Thermal-anomaly detection (see thermal.ts): a rolling temp buffer plus
+  // per-condition latches so each event notifies once until it recovers.
+  private tempHist: TempPoint[] = [];
+  private lastThermalAt = 0;
+  private lastSetTemp: number | null = null;
+  private atTemp = false;        // reached the setpoint band since it last changed
+  private doorFired = false;
+  private pelletLowFired = false;
+
   constructor(private readonly store: SettingsStore) {
     this.dir = path.join(app.getPath('userData'), 'cooks');
     try {
@@ -68,6 +78,7 @@ export class Recorder {
     this.handleCookLifecycle(state, now);
     if (this.cookId) this.maybeSample(state, now);
     this.checkAlerts(state);
+    this.checkThermal(state, now);
     this.logTransitions(state);
     this.prev = { ...this.prev, ...state };
   }
@@ -95,7 +106,12 @@ export class Recorder {
     this.samples = [];
     const file = path.join(this.dir, `${this.cookId}.jsonl`);
     this.stream = fs.createWriteStream(file, { flags: 'a' });
-    this.writeLine({ type: 'meta', startedAt: now, device: this.device });
+    // Snapshot the probe labels at cook start so a past session shows what was
+    // on each probe even after they're renamed for the next cook.
+    this.writeLine({
+      type: 'meta', startedAt: now, device: this.device,
+      labels: this.store.get().probeLabels,
+    });
     log(`cook started: ${this.cookId}`);
   }
 
@@ -149,7 +165,9 @@ export class Recorder {
   // --- alerts --------------------------------------------------------------
 
   private checkAlerts(state: GrillState): void {
-    const userTargets = this.store.get().probeTargets;
+    const settings = this.store.get();
+    const userTargets = settings.probeTargets;
+    const labels = settings.probeLabels || {};
     for (let i = 1; i <= PROBE_COUNT; i++) {
       const cur = probeTemp(state, i);
       // Prefer the grill's OWN target (what triggers its "IT" alert) so our
@@ -159,7 +177,8 @@ export class Recorder {
       if (cur >= target) {
         if (!this.probeFired[i]) {
           this.probeFired[i] = true;
-          this.notify(`Probe ${i} reached target`, `${cur}° — target was ${target}°`, true);
+          const name = labels[i]?.trim() || `Probe ${i}`;
+          this.notify(`${name} reached target`, `${cur}° — target was ${target}°`, true);
         }
       } else if (cur < target - 2) {
         this.probeFired[i] = false; // hysteresis so it can fire again next cook
@@ -185,6 +204,70 @@ export class Recorder {
       this.notify(title, body);
     } else if (!active) {
       this[latch] = false;
+    }
+  }
+
+  // Watch the grill-temp trend for a lid opening (steep drop) or a starving
+  // fire / out-of-pellets (slow sustained decline below setpoint). Only judged
+  // once the grill has reached temp, so warm-up and setpoint changes don't
+  // false-alarm. See thermal.ts for the thresholds and rationale.
+  private checkThermal(state: GrillState, now: number): void {
+    const on = !!state.moduleIsOn;
+    const set = typeof state.grillSetTemp === 'number' ? state.grillSetTemp : null;
+    const temp = typeof state.grillTemp === 'number' ? state.grillTemp : null;
+
+    // Off or data missing: reset the whole detector.
+    if (!on || set == null || temp == null) {
+      this.tempHist = [];
+      this.atTemp = false;
+      this.doorFired = this.pelletLowFired = false;
+      this.lastSetTemp = set;
+      return;
+    }
+
+    // A setpoint change starts a fresh regime — require re-reaching temp before
+    // warning again (this also suppresses the natural drop after lowering it).
+    if (set !== this.lastSetTemp) {
+      this.lastSetTemp = set;
+      this.atTemp = false;
+      this.doorFired = this.pelletLowFired = false;
+      this.tempHist = [];
+    }
+    if (temp >= set - THERMAL.atTempBand) this.atTemp = true;
+
+    // Feed the trend buffer (throttled) and prune to the retention window.
+    if (now - this.lastThermalAt >= THERMAL.sampleMs) {
+      this.lastThermalAt = now;
+      this.tempHist.push({ t: now, v: temp });
+      const cutoff = now - THERMAL.windowMs;
+      while (this.tempHist.length && this.tempHist[0].t < cutoff) this.tempHist.shift();
+    }
+
+    const v = classifyThermal({
+      now, hist: this.tempHist, setTemp: set, grillTemp: temp,
+      atTemp: this.atTemp, noPellets: !!state.noPellets, doorActive: this.doorFired,
+    });
+
+    // Lid/door open — steep drop. Latch until temp recovers toward setpoint.
+    if (v.door) {
+      if (!this.doorFired) {
+        this.doorFired = true;
+        this.notify('Lid open?',
+          `Grill temp is dropping fast (${Math.round(v.shortRate ?? 0)}°/min, now ${temp}°). Close the lid to hold heat.`);
+      }
+    } else if (v.dev < THERMAL.doorRecover) {
+      this.doorFired = false;
+    }
+
+    // Starving fire / out of pellets — slow sustained decline. Latch similarly.
+    if (v.pellet) {
+      if (!this.pelletLowFired) {
+        this.pelletLowFired = true;
+        this.notify('Running low on pellets?',
+          `Temp has fallen to ${temp}° (set ${set}°) and keeps dropping — check the hopper and firepot.`);
+      }
+    } else if (v.dev < THERMAL.pelletRecover) {
+      this.pelletLowFired = false;
     }
   }
 
@@ -273,18 +356,19 @@ export class Recorder {
     let startedAt = 0;
     let endedAt: number | null = null;
     let device: string | undefined;
+    let labels: Record<number, string> | undefined;
     let samples = 0;
     for (const line of raw.split('\n')) {
       if (!line.trim()) continue;
       try {
         const obj = JSON.parse(line);
-        if (obj.type === 'meta') { startedAt = obj.startedAt; device = obj.device; }
+        if (obj.type === 'meta') { startedAt = obj.startedAt; device = obj.device; labels = obj.labels; }
         else if (obj.type === 'end') endedAt = obj.endedAt;
         else if (typeof obj.t === 'number') samples++;
       } catch { /* skip */ }
     }
     if (!startedAt) return null;
-    return { id, startedAt, endedAt, samples, device };
+    return { id, startedAt, endedAt, samples, device, labels };
   }
 
   dispose(): void {

@@ -10,6 +10,7 @@
     "start": "npm run build && electron .",
     "dev": "npm run build && electron . --dev",
     "watch": "tsc -p tsconfig.json -w",
+    "test": "npm run build && node scripts/test-thermal.mjs",
     "pack": "npm run build && electron-builder --dir"
   },
   "author": "",
