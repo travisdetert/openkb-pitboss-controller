@@ -1,0 +1,293 @@
+:root {
+  --bg: #16110d;
+  --bg-card: #211a13;
+  --bg-card2: #2b2118;
+  --border: #3a2c1e;
+  --text: #f4ece2;
+  --muted: #a8927c;
+  --flame: #ff6b1a;
+  --flame-dim: #c2521a;
+  --ok: #4ccf6a;
+  --warn: #ffcf4d;
+  --danger: #e8533f;
+  --blue: #5aa9e6;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+/* Top bar */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  -webkit-app-region: drag;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  flex: none;
+}
+.brand .flame { color: var(--flame); }
+
+.conn-pill {
+  -webkit-app-region: no-drag;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.conn-pill:hover { background: var(--bg-card2); }
+.conn-pill { flex: none; max-width: 160px; }
+#connLabel { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conn-pill .dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--muted);
+}
+.conn-pill[data-state="connected"] .dot { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+.conn-pill[data-state="connecting"] .dot { background: var(--warn); animation: pulse 1s infinite; }
+.conn-pill[data-state="disconnected"] .dot { background: var(--danger); }
+@keyframes pulse { 50% { opacity: 0.3; } }
+
+main {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  height: calc(100vh - 53px);
+}
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px;
+}
+.card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.card-title { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+.set-label { font-size: 13px; color: var(--flame); font-weight: 600; }
+
+/* Big temperature */
+.bigtemp {
+  text-align: center;
+  margin: 4px 0 14px;
+}
+.bigtemp-value {
+  font-size: 72px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.bigtemp-unit { font-size: 24px; color: var(--muted); margin-left: 4px; }
+
+/* Setpoint stepper */
+.target-caption {
+  text-align: center;
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 8px;
+}
+
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  justify-content: center;
+  margin-bottom: 14px;
+}
+.chip {
+  background: var(--bg-card2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 6px 11px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.chip:hover { border-color: var(--flame-dim); }
+.chip.active { background: var(--flame); border-color: var(--flame); color: #1a1208; font-weight: 700; }
+
+.grill-actions { display: flex; flex-direction: column; gap: 8px; }
+.action-row { display: flex; gap: 8px; }
+.action-row-secondary .btn { padding: 8px; font-size: 12px; border-radius: 8px; }
+.btn {
+  flex: 1;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-card2);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.15s, opacity 0.15s;
+}
+.btn:hover { filter: brightness(1.12); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-primary { background: var(--flame); border-color: var(--flame); color: #1a1208; }
+.btn-danger { background: transparent; border-color: var(--danger); color: var(--danger); }
+.btn-ghost { background: transparent; }
+.btn-ghost.active {
+  background: var(--flame);
+  border-color: var(--flame);
+  color: #1a1208;
+  animation: btnpulse 1.1s ease-in-out infinite;
+}
+@keyframes btnpulse { 50% { filter: brightness(1.25); } }
+
+/* Component status LEDs, in the header bar */
+.statusbar {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  -webkit-app-region: drag;
+}
+.stat {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.led {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: #3a2c1e;
+  border: 1px solid #4a3826;
+  flex: none;
+}
+.led.on { background: var(--ok); box-shadow: 0 0 8px var(--ok); border-color: var(--ok); }
+.led.hot { background: var(--flame); box-shadow: 0 0 8px var(--flame); border-color: var(--flame); }
+
+/* Keep the header on one line as the window narrows. */
+@media (max-width: 440px) { .stat-label { display: none; } }
+@media (max-width: 400px) { .brand-name { display: none; } }
+
+.err-banner {
+  margin-top: 12px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  background: rgba(232, 83, 63, 0.15);
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  font-size: 13px;
+}
+
+/* Probes */
+.probe-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.probe-row:last-child { border-bottom: none; }
+.probe-id { display: flex; flex-direction: column; gap: 2px; }
+.probe-name { font-size: 13px; color: var(--muted); }
+.probe-grill { font-size: 11px; color: var(--flame); min-height: 13px; }
+.probe-temp { font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.probe-temp .pu { font-size: 14px; color: var(--muted); }
+/* Probe at/over the grill's target — mirrors the controller's blinking "IT". */
+.probe-temp.reached { color: var(--flame); animation: btnpulse 1.1s ease-in-out infinite; }
+.probe-target {
+  display: flex; align-items: center; gap: 6px;
+}
+.probe-target input {
+  width: 56px;
+  background: var(--bg-card2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 7px;
+  padding: 6px;
+  font-size: 14px;
+  text-align: center;
+}
+.probe-target button {
+  background: var(--bg-card2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 7px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.probe-target button:hover { border-color: var(--flame-dim); }
+
+/* Temperature history graph */
+.cook-select {
+  -webkit-app-region: no-drag;
+  background: var(--bg-card2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 7px;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  max-width: 180px;
+}
+.cook-select:focus { outline: none; border-color: var(--flame-dim); }
+.chart {
+  display: block;
+  width: 100%;
+  height: 150px;
+}
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.legend .key { display: flex; align-items: center; gap: 5px; }
+.legend .swatch { width: 11px; height: 3px; border-radius: 2px; }
+
+/* Slim button strip (not a full card) — keeps secondary actions compact. */
+
+.toast {
+  position: fixed;
+  bottom: 18px; left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-card2);
+  border: 1px solid var(--border);
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+  z-index: 10;
+}
+.toast.err { border-color: var(--danger); color: var(--danger); }
+.hidden { display: none !important; }
+
+main.disconnected .card:not(.grill-card):not(.graph-card) { opacity: 0.5; }

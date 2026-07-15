@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; style-src 'self' 'unsafe-inline';" />
+  <title>Pit Boss</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="flame">▲</span>
+      <span class="brand-name">Pit Boss</span>
+    </div>
+    <div class="statusbar" id="statusbar">
+      <span class="stat"><span class="led" id="ledFan"></span><span class="stat-label">Fan</span></span>
+      <span class="stat"><span class="led" id="ledHot"></span><span class="stat-label">Ign</span></span>
+      <span class="stat"><span class="led" id="ledMotor"></span><span class="stat-label">Aug</span></span>
+      <span class="stat"><span class="led" id="ledModule"></span><span class="stat-label">Pwr</span></span>
+    </div>
+    <button id="connBtn" class="conn-pill" data-state="disconnected">
+      <span class="dot"></span>
+      <span id="connLabel">Disconnected</span>
+    </button>
+  </header>
+
+  <main id="app">
+    <!-- Fault alert (only shown when the controller reports an error) -->
+    <div id="errBanner" class="err-banner hidden"></div>
+
+    <!-- Grill temperature -->
+    <section class="card grill-card">
+      <div class="card-head">
+        <span class="card-title">Grill</span>
+        <span id="grillSetLabel" class="set-label">— —</span>
+      </div>
+      <div class="bigtemp">
+        <span id="grillTemp" class="bigtemp-value">--</span>
+        <span class="bigtemp-unit" id="unit">°F</span>
+      </div>
+
+      <div class="target-caption">Target °F</div>
+      <div id="presets" class="presets"></div>
+
+      <div class="grill-actions">
+        <div class="action-row">
+          <button id="setBtn" class="btn btn-primary" disabled>Set Temperature</button>
+          <button id="offBtn" class="btn btn-danger" disabled>Turn Off</button>
+        </div>
+        <div class="action-row action-row-secondary">
+          <button id="lightBtn" class="btn btn-ghost hidden">Light</button>
+          <button id="primeBtn" class="btn btn-ghost">Prime</button>
+          <button id="refreshBtn" class="btn btn-ghost">Refresh</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Temperature history -->
+    <section class="card graph-card">
+      <div class="card-head">
+        <span class="card-title">History</span>
+        <select id="cookSelect" class="cook-select" title="View a past cook">
+          <option value="">● Live</option>
+        </select>
+      </div>
+      <canvas id="chart" class="chart"></canvas>
+      <div id="chartLegend" class="legend"></div>
+    </section>
+
+    <!-- Meat probes -->
+    <section class="card" id="probesCard">
+      <div class="card-head"><span class="card-title">Meat Probes</span></div>
+      <div id="probes"></div>
+    </section>
+
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="./renderer.js"></script>
+</body>
+</html>

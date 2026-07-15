@@ -1,0 +1,9 @@
+node_modules/
+dist/
+release/
+build/icon.iconset/
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+/tmp/
