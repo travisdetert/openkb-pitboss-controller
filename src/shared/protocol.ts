@@ -86,6 +86,16 @@ export interface Settings {
   grillName: string;
   grillModel: string;
   windowBounds?: { x?: number; y?: number; width: number; height: number };
+  pellets?: PelletState;
+}
+
+// Estimated pellet level, derived from cumulative auger run-time. Rough by
+// nature — the feed rate is tunable and the user recalibrates via "Refilled".
+export interface PelletState {
+  capacityLbs: number;        // hopper size
+  feedRateLbsPerHr: number;   // pounds consumed per hour of auger run-time
+  augerSeconds: number;       // cumulative auger-on seconds since last refill
+  refilledAt: number;         // epoch ms of last refill
 }
 
 // One recorded point in a cook's temperature history.
@@ -97,6 +107,11 @@ export interface Sample {
   p2Temp: number | null;
   p3Temp: number | null;
   p4Temp: number | null;
+  // Component activity (on at any point in this interval). Optional so older
+  // cook files without them still parse.
+  auger?: boolean;              // motorState
+  fan?: boolean;                // fanState
+  igniter?: boolean;            // hotState (hot rod)
 }
 
 // Summary of a saved cook session.

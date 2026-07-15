@@ -59,6 +59,12 @@ export class Recorder {
   private doorFired = false;
   private pelletLowFired = false;
 
+  // Component-activity latches — OR'd between 5s samples so brief auger pulses
+  // still register on the activity graph.
+  private augerSeen = false;
+  private fanSeen = false;
+  private igniterSeen = false;
+
   constructor(private readonly store: SettingsStore) {
     this.dir = path.join(app.getPath('userData'), 'cooks');
     try {
@@ -75,6 +81,11 @@ export class Recorder {
   /** Called for every state event from the sidecar. */
   observe(state: GrillState): void {
     const now = Date.now();
+    // Latch component activity for the activity graph before we (maybe) sample.
+    if (state.motorState) this.augerSeen = true;
+    if (state.fanState) this.fanSeen = true;
+    if (state.hotState) this.igniterSeen = true;
+
     this.handleCookLifecycle(state, now);
     if (this.cookId) this.maybeSample(state, now);
     this.checkAlerts(state);
@@ -137,7 +148,11 @@ export class Recorder {
       p2Temp: probeTemp(merged, 2),
       p3Temp: probeTemp(merged, 3),
       p4Temp: probeTemp(merged, 4),
+      auger: this.augerSeen || !!merged.motorState,
+      fan: this.fanSeen || !!merged.fanState,
+      igniter: this.igniterSeen || !!merged.hotState,
     };
+    this.augerSeen = this.fanSeen = this.igniterSeen = false;
     this.samples.push(sample);
     this.writeLine(sample);
   }
