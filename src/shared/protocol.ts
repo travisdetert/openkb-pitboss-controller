@@ -63,7 +63,12 @@ export type SidecarEvent =
   | { type: 'state'; data: GrillState }
   | { type: 'scan_result'; id?: number; devices: ScanDevice[] }
   | { type: 'ack'; id?: number; ok: true; result: unknown }
-  | { type: 'error'; id?: number; ok: false; message: string };
+  | { type: 'error'; id?: number; ok: false; message: string }
+  // main -> renderer relay of a fired notification, so the in-app status bar can
+  // surface it (lid open, probe done, pellets, …) alongside the OS notification.
+  | { type: 'notice'; title: string; body: string; level: NoticeLevel };
+
+export type NoticeLevel = 'info' | 'warn' | 'alert';
 
 // Commands renderer -> main -> sidecar
 export type GrillCommand =

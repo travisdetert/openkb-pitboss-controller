@@ -6,7 +6,7 @@ import { Sidecar } from './sidecar';
 import { SettingsStore } from './store';
 import { Recorder } from './recorder';
 import { TrayManager } from './tray';
-import { GrillCommand, IPC, Settings, SidecarEvent } from '../shared/protocol';
+import { GrillCommand, GrillState, IPC, Settings, SidecarEvent } from '../shared/protocol';
 
 // Project root = two levels up from dist/main/.
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
@@ -21,6 +21,19 @@ let recorder: Recorder | null = null;
 let tray: TrayManager | null = null;
 let wasConnected = false;
 let isQuitting = false;
+
+// Cache the latest capabilities/status/merged-state so a window that loads (or
+// reloads) after they were first sent still gets the full picture — capabilities
+// is only emitted once per connect, and would otherwise be lost on a reload.
+let lastCaps: SidecarEvent | null = null;
+let lastStatus: SidecarEvent | null = null;
+let mergedState: GrillState = {};
+
+function replayTo(wc: Electron.WebContents): void {
+  if (lastCaps) wc.send(IPC.event, lastCaps);
+  if (lastStatus) wc.send(IPC.event, lastStatus);
+  if (Object.keys(mergedState).length) wc.send(IPC.event, { type: 'state', data: mergedState });
+}
 
 /** Show the window (creating/un-hiding it), or hide it if already up front. */
 function toggleWindow(): void {
@@ -51,6 +64,12 @@ function createWindow(): void {
 
   attachRendererConsole(win.webContents);
   win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
+
+  // Replay the current capabilities/status/state to the (re)loaded window so it
+  // rebuilds its controls and readouts even if it missed the one-shot events.
+  win.webContents.on('did-finish-load', () => {
+    if (win) replayTo(win.webContents);
+  });
 
   // Dev affordance: PITBOSS_SHOT=<path> dumps a PNG of the rendered UI once
   // loaded (no Screen Recording permission needed — it's our own page).
@@ -107,9 +126,13 @@ function startSidecar(): void {
   // so charting, alerts, and the menu-bar readout work even with no window open.
   sidecar.on('event', (evt: SidecarEvent) => {
     if (evt.type === 'state') {
+      mergedState = { ...mergedState, ...evt.data };
       recorder?.observe(evt.data);
       tray?.setState(evt.data);
+    } else if (evt.type === 'capabilities') {
+      lastCaps = evt;
     } else if (evt.type === 'status') {
+      lastStatus = evt;
       if (evt.device) recorder?.setDevice(evt.device);
       tray?.setConn(evt.connected, evt.connecting, evt.device);
       // Desktop notification when the grill comes online (edge-triggered).
@@ -125,6 +148,7 @@ function startSidecar(): void {
 }
 
 function notify(title: string, body: string): void {
+  win?.webContents.send(IPC.event, { type: 'notice', title, body, level: 'info' });
   if (!Notification.isSupported()) return;
   try { new Notification({ title, body }).show(); }
   catch (e) { log('notification failed:', (e as Error).message); }
@@ -140,6 +164,9 @@ app.whenReady().then(() => {
   }
   store = new SettingsStore();
   recorder = new Recorder(store);
+  // Relay the recorder's notifications into the renderer's status bar.
+  recorder.onNotice = (title, body, level) =>
+    win?.webContents.send(IPC.event, { type: 'notice', title, body, level });
   tray = new TrayManager(TRAY_ICON, {
     toggleWindow,
     turnOff: () => { sidecar?.request({ cmd: 'off' }).catch(() => { /* surfaced in UI */ }); },

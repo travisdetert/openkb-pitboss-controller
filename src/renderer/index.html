@@ -33,6 +33,9 @@
     <button id="refreshBtn" class="btn btn-ghost">Refresh</button>
   </div>
 
+  <!-- Live status line: grill lifecycle + surfaced notifications -->
+  <div id="statusBar" class="status-bar level-off">Connecting…</div>
+
   <main id="app">
     <!-- Fault alert (only shown when the controller reports an error) -->
     <div id="errBanner" class="err-banner hidden"></div>
@@ -54,19 +57,22 @@
       <div class="target-caption">Target °F</div>
       <div id="presets" class="presets"></div>
 
-      <div class="pellet-gauge">
-        <div class="pellet-head">
-          <span class="pellet-label">Pellets <span class="pellet-note">est.</span></span>
-          <button id="refillBtn" class="pellet-refill" title="Reset the estimate — tap after filling the hopper">Refilled</button>
-        </div>
-        <div class="pellet-bar"><div class="pellet-fill ok" id="pelletFill"></div></div>
-        <div class="pellet-sub" id="pelletSub">~-- %</div>
-      </div>
-
       <canvas id="grillChart" class="panel-canvas"></canvas>
       <div class="activity-wrap">
         <div class="activity-title">Component activity</div>
         <canvas id="activityChart" class="activity-canvas"></canvas>
+      </div>
+
+      <div class="pellet-gauge">
+        <div class="pellet-head">
+          <span class="pellet-label">Pellets <span class="pellet-note">est.</span></span>
+          <span class="pellet-btns">
+            <button id="refillBtn" class="pellet-btn" title="Tap after filling the hopper — resets the estimate to full">Refilled</button>
+            <button id="emptiedBtn" class="pellet-btn" title="Tap after emptying the hopper — best practice to store pellets dry between cooks">Emptied</button>
+          </span>
+        </div>
+        <div class="pellet-bar"><div class="pellet-fill ok" id="pelletFill"></div></div>
+        <div class="pellet-sub" id="pelletSub">~-- %</div>
       </div>
     </section>
 

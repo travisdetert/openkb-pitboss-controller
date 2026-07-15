@@ -14,13 +14,14 @@
 import { app, Notification, shell } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
-import { CookMeta, GrillState, Sample } from '../shared/protocol';
+import { CookMeta, GrillState, NoticeLevel, Sample } from '../shared/protocol';
 import { SettingsStore } from './store';
 import { classifyThermal, TempPoint, THERMAL } from './thermal';
 import { log } from './log';
 
 const SAMPLE_INTERVAL_MS = 5_000;   // at most one recorded point per 5s
 const PROBE_COUNT = 4;
+const OVER_TARGET_MARGIN = 5;       // ° past target before we flag "over"
 
 function fileStem(epochMs: number): string {
   // 2026-06-23T18:30:00.000Z -> 2026-06-23T18-30-00  (filename-safe, sortable)
@@ -47,8 +48,14 @@ export class Recorder {
   // Alert latches — reset when the underlying condition clears, so each fresh
   // occurrence notifies exactly once.
   private probeFired: Record<number, boolean> = {};
+  private probeOverFired: Record<number, boolean> = {};
   private pelletsFired = false;
   private errorFired = false;
+
+  // Power-off / session-concluded tracking: fires once the grill has fully shut
+  // down (module off AND the cool-down fan has stopped) after having run.
+  private wasRunning = false;
+  private poweredOffFired = false;
 
   // Thermal-anomaly detection (see thermal.ts): a rolling temp buffer plus
   // per-condition latches so each event notifies once until it recovers.
@@ -90,6 +97,7 @@ export class Recorder {
     if (this.cookId) this.maybeSample(state, now);
     this.checkAlerts(state);
     this.checkThermal(state, now);
+    this.checkPowerState(state);
     this.logTransitions(state);
     this.prev = { ...this.prev, ...state };
   }
@@ -189,14 +197,23 @@ export class Recorder {
       // notification fires at the same instant; fall back to the user's value.
       const target = this.grillProbeTarget(state, i) ?? userTargets[i];
       if (cur == null || !target) continue;
+      const name = labels[i]?.trim() || `Probe ${i}`;
       if (cur >= target) {
         if (!this.probeFired[i]) {
           this.probeFired[i] = true;
-          const name = labels[i]?.trim() || `Probe ${i}`;
           this.notify(`${name} reached target`, `${cur}° — target was ${target}°`, true);
         }
       } else if (cur < target - 2) {
         this.probeFired[i] = false; // hysteresis so it can fire again next cook
+      }
+      // Escalate when it climbs well past the target — the food is overcooking.
+      if (cur >= target + OVER_TARGET_MARGIN) {
+        if (!this.probeOverFired[i]) {
+          this.probeOverFired[i] = true;
+          this.notify(`${name} over target`, `${cur}° — ${cur - target}° over the ${target}° target.`, true);
+        }
+      } else if (cur < target) {
+        this.probeOverFired[i] = false;
       }
     }
 
@@ -286,6 +303,25 @@ export class Recorder {
     }
   }
 
+  // Announce a full power-off once, when the grill has run and then completely
+  // shut down — module off AND the cool-down fan stopped. This is the safe,
+  // "session concluded" moment (and the completion signal a graceful shutdown
+  // waits on). Re-arms when the grill next powers on.
+  private checkPowerState(state: GrillState): void {
+    if (state.moduleIsOn) {
+      this.wasRunning = true;
+      this.poweredOffFired = false;
+      return;
+    }
+    // Module off. Wait for the fan to stop (cool-down complete) before calling it.
+    if (this.wasRunning && state.fanState === false && !this.poweredOffFired) {
+      this.poweredOffFired = true;
+      this.wasRunning = false;
+      this.notify('Your Pit Boss is powered off',
+        'Shutdown complete — the grill is cool and this cook session is concluded.');
+    }
+  }
+
   // The grill reports a target only for probe 1 (p1Target). 960 is pytboss's
   // "unset / unplugged" sentinel; ignore it and implausible values.
   private grillProbeTarget(state: GrillState, i: number): number | null {
@@ -304,8 +340,13 @@ export class Recorder {
     return errs.length ? `Fault: ${errs.join(', ')}.` : 'Controller reported a fault.';
   }
 
+  // Set by main to relay notifications to the renderer's status bar.
+  onNotice?: (title: string, body: string, level: NoticeLevel) => void;
+
   private notify(title: string, body: string, beep = false): void {
     log(`notify: ${title} — ${body}`);
+    // Surface it in-app too (the status bar), not just as an OS notification.
+    this.onNotice?.(title, body, beep ? 'alert' : 'warn');
     // An audible cue for "meat is done", to match the grill's own beep. The
     // OS notification carries the default sound; shell.beep() adds emphasis.
     if (beep) {

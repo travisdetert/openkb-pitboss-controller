@@ -55,7 +55,10 @@ type SidecarEvent =
   | { type: 'state'; data: GrillState }
   | { type: 'scan_result'; id?: number; devices: ScanDevice[] }
   | { type: 'ack'; id?: number; ok: true; result: unknown }
-  | { type: 'error'; id?: number; ok: false; message: string };
+  | { type: 'error'; id?: number; ok: false; message: string }
+  | { type: 'notice'; title: string; body: string; level: NoticeLevel };
+
+type NoticeLevel = 'info' | 'warn' | 'alert';
 
 interface PitbossApi {
   connect(name?: string, model?: string): Promise<unknown>;
@@ -85,6 +88,12 @@ let state: GrillState = {};
 let connected = false;
 let connecting = false;
 let wantConnection = true;   // user intent; the sidecar auto-retries while true
+// Live data heartbeat: while state keeps arriving we're effectively live, even
+// if a stale/spurious status event says otherwise. When it stops, the readouts
+// are stale (frozen), which we surface honestly rather than pretending live.
+let lastDataAt = 0;
+const DATA_FRESH_MS = 12_000;
+const dataFresh = (): boolean => lastDataAt > 0 && Date.now() - lastDataAt < DATA_FRESH_MS;
 let setTempValue = 225;       // pending setpoint shown in the stepper
 // Once the user adjusts the stepper we stop mirroring the grill's own setpoint
 // into it (so we don't fight their edit); reset on each fresh connect.
@@ -93,6 +102,9 @@ const probeTargets: Record<number, number> = { 1: 145, 2: 165 };
 // The controller can hold a target only for the first two probes (the sidecar's
 // set_probe rejects the rest); probes beyond this are read-only monitors.
 const SETTABLE_PROBES = 2;
+// How far past the target a probe must read before we flag it as OVER (rather
+// than just "at target") — a small band so normal carry-over doesn't alarm.
+const OVER_TARGET_MARGIN = 5;
 // Optional user labels per probe ("Chicken", "Pork Shoulder"), persisted and
 // snapshotted into each recorded cook so past sessions show what was cooking.
 const probeLabels: Record<number, string> = {};
@@ -177,6 +189,48 @@ async function run(label: string, p: Promise<unknown>): Promise<void> {
   }
 }
 
+// ---- status bar ------------------------------------------------------------
+// A relayed notification, shown in the status bar for a short window before it
+// reverts to the live grill lifecycle.
+let activeNotice: { text: string; level: NoticeLevel; until: number } | null = null;
+const NOTICE_MS = 12_000;
+
+// The grill's current lifecycle phase, derived from live state.
+function lifecycleStatus(): { text: string; level: string } {
+  if (!dataFresh()) {
+    if (lastDataAt > 0) {
+      const secs = Math.round((Date.now() - lastDataAt) / 1000);
+      return { text: `Reconnecting… last reading ${secs}s ago (values may be stale)`, level: 'warn' };
+    }
+    return { text: wantConnection ? 'Connecting…' : 'Disconnected', level: 'off' };
+  }
+  const t = state.grillTemp, set = state.grillSetTemp;
+  if (state.moduleIsOn) {
+    if (typeof t === 'number' && typeof set === 'number') {
+      if (t < set - 12) return { text: `Raising temp to ${set}${unit()} · ${t}${unit()} now`, level: 'heat' };
+      if (t > set + 12) return { text: `Cooling to ${set}${unit()} · ${t}${unit()} now`, level: 'info' };
+      return { text: `Holding at ${set}${unit()}`, level: 'heat' };
+    }
+    return { text: 'Grill running', level: 'info' };
+  }
+  // Powered off: the fan keeps running through the shutdown/cool-down cycle.
+  if (state.fanState) return { text: 'Powering down…', level: 'info' };
+  return { text: 'Grill off', level: 'off' };
+}
+
+function renderStatusBar(): void {
+  const bar = document.getElementById('statusBar');
+  if (!bar) return;
+  let text: string, level: string;
+  if (activeNotice && Date.now() < activeNotice.until) {
+    text = activeNotice.text; level = activeNotice.level;
+  } else {
+    ({ text, level } = lifecycleStatus());
+  }
+  bar.textContent = text;
+  bar.className = 'status-bar level-' + level;
+}
+
 // ---- rendering -------------------------------------------------------------
 function clampTemp(v: number): number {
   const lo = caps?.min_temp ?? 180;
@@ -187,21 +241,26 @@ function clampTemp(v: number): number {
 function renderConnection(): void {
   const btn = $('connBtn');
   const label = $('connLabel');
-  // While the user wants a connection, the sidecar keeps retrying — present
-  // that as a steady "Connecting…" rather than flickering to "Connect".
-  const retrying = wantConnection && !connected;
-  const st = connected ? 'connected' : retrying ? 'connecting' : 'disconnected';
+  // We're "live" whenever data is still arriving — that's the real signal the
+  // controls should follow. A retry is only shown when data has actually gone
+  // stale (so a spurious status drop mid-stream doesn't blank the UI).
+  const live = dataFresh();
+  const retrying = wantConnection && !live;
+  const st = live ? 'connected' : retrying ? 'connecting' : 'disconnected';
   btn.dataset.state = st;
   label.textContent =
-    connected ? (state.__device || 'Connected') :
-    retrying ? 'Connecting…' :
+    live ? (state.__device || 'Connected') :
+    retrying ? 'Reconnecting…' :
     'Connect';
 
   const main = $('app');
-  main.classList.toggle('disconnected', !connected);
+  // Only dim/degrade when data is genuinely stale — not on a status blip while
+  // readings keep coming.
+  main.classList.toggle('disconnected', !live);
+  main.classList.toggle('stale', !live && lastDataAt > 0);
 
-  // Enable/disable controls.
-  const enable = connected;
+  // Controls follow liveness; enable them whenever data is flowing.
+  const enable = live;
   ['offBtn', 'lightBtn', 'primeBtn', 'refreshBtn']
     .forEach((id) => {
       const el = document.getElementById(id) as HTMLButtonElement | null;
@@ -209,6 +268,8 @@ function renderConnection(): void {
     });
   document.querySelectorAll<HTMLButtonElement>('.chip, .probe-target button, .probe-target input')
     .forEach((el) => (el.disabled = !enable));
+
+  renderStatusBar();
 }
 
 // Some models (e.g. PB1100PSC3) report no temp_increments in the pytboss data,
@@ -629,18 +690,21 @@ function renderState(): void {
     // Prefer the grill's OWN target (what drives its "IT" alert) over the app's.
     const target = grillProbeTarget(i) ?? probeTargets[i] ?? null;
     const reached = v != null && target != null && v >= target;
-    tempEl.classList.toggle('reached', reached);
+    const over = v != null && target != null && v >= target + OVER_TARGET_MARGIN;
+    tempEl.classList.toggle('reached', reached && !over);
+    tempEl.classList.toggle('over', over);
 
-    // Status dot + subline: unplugged / monitoring / counting down / at target.
+    // Status dot + subline: unplugged / monitoring / to-go / at target / OVER.
     let cls: string, text: string;
     if (v == null) { cls = 'off'; text = 'Not connected'; }
     else if (target == null) { cls = 'ok'; text = 'Monitoring'; }
+    else if (over) { cls = 'over'; text = `⚠ ${v - target}° over target ${target}${unit()}`; }
     else if (reached) { cls = 'done'; text = `At target ${target}${unit()} ✓`; }
     else { cls = 'warn'; text = `${target - v}° to go · target ${target}${unit()}`; }
     const dot = document.getElementById(`p${i}Dot`);
     const sub = document.getElementById(`p${i}Sub`);
     if (dot) dot.className = 'probe-dot ' + cls;
-    if (sub) sub.textContent = text;
+    if (sub) { sub.textContent = text; sub.classList.toggle('over-sub', over); }
   }
 
   led('ledFan', !!state.fanState);
@@ -676,6 +740,7 @@ function renderState(): void {
   }
 
   renderPellets();
+  renderStatusBar();
 }
 
 // ---- event wiring ----------------------------------------------------------
@@ -709,6 +774,16 @@ function wireControls(): void {
     persist({ pellets });
     renderPellets();
     toast('Hopper refilled — pellet estimate reset to full');
+  });
+
+  // Emptied: hopper drained to store pellets dry between cooks. Mark it empty by
+  // charging the estimate a full hopper's worth of consumption (0% remaining).
+  $('emptiedBtn').addEventListener('click', () => {
+    pellets.augerSeconds = (pellets.capacityLbs / pellets.feedRateLbsPerHr) * 3600;
+    pellets.refilledAt = 0;
+    persist({ pellets });
+    renderPellets();
+    toast('Hopper emptied — good call keeping pellets dry between cooks');
   });
 }
 
@@ -776,8 +851,11 @@ function handleEvent(evt: SidecarEvent): void {
       renderConnection();
       break;
     case 'state': {
+      const wasStale = !dataFresh();
+      lastDataAt = Date.now();           // heartbeat: data is flowing
       const wasOn = state.moduleIsOn;
       state = { ...state, ...evt.data };
+      if (wasStale) renderConnection();  // data resumed — un-dim the UI
       // Mirror the grill's own setpoint into the stepper until the user edits it,
       // so the target reflects what the grill is actually set to (not a stale value).
       if (!userSetTarget && typeof state.grillSetTemp === 'number'
@@ -809,6 +887,10 @@ function handleEvent(evt: SidecarEvent): void {
     case 'error':
       toast(evt.message, true);
       break;
+    case 'notice':
+      activeNotice = { text: evt.title, level: evt.level, until: Date.now() + NOTICE_MS };
+      renderStatusBar();
+      break;
   }
 }
 
@@ -837,6 +919,10 @@ async function boot(): Promise<void> {
   renderSetpoint();
   renderConnection();
   await hydrateHistory();
+
+  // Tick so liveness/status expire on their own when data stops arriving (no
+  // event would otherwise fire to flip the UI to "reconnecting / stale").
+  window.setInterval(() => renderConnection(), 3000);
 
   // Auto-connect on launch — it's a single-purpose appliance controller.
   window.pitboss.connect(grillName, grillModel).catch(() => { /* surfaced via status events */ });
