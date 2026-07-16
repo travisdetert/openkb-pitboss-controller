@@ -256,6 +256,18 @@ function lifecycleStatus(): { text: string; level: string } {
   return { text: 'Grill off', level: 'off' };
 }
 
+// The sticky alert banner — shows the latest important warning until dismissed.
+function showAlertBanner(text: string, level: NoticeLevel): void {
+  const el = document.getElementById('alertBanner');
+  const txt = document.getElementById('alertText');
+  if (!el || !txt) return;
+  txt.textContent = text;
+  el.className = 'alert-banner level-' + level;
+}
+function dismissAlertBanner(): void {
+  document.getElementById('alertBanner')?.classList.add('hidden');
+}
+
 function renderStatusBar(): void {
   const bar = document.getElementById('statusBar');
   if (!bar) return;
@@ -955,6 +967,8 @@ function handleEvent(evt: SidecarEvent): void {
     case 'notice':
       activeNotice = { text: evt.title, level: evt.level, until: Date.now() + NOTICE_MS };
       renderStatusBar();
+      // Important warnings also drop a sticky banner that stays until dismissed.
+      if (evt.level !== 'info') showAlertBanner(evt.title, evt.level);
       break;
     case 'shutdown':
       shutdown = evt.phase ? { phase: evt.phase, coolFrom: evt.coolFrom, coolTarget: evt.coolTarget } : null;
@@ -1014,6 +1028,7 @@ function saveSettings(): void {
   toast('Settings saved');
 }
 function wireSettings(): void {
+  $('alertDismiss').addEventListener('click', dismissAlertBanner);
   $('settingsBtn').addEventListener('click', openSettings);
   $('settingsClose').addEventListener('click', closeSettings);
   $('settingsReset').addEventListener('click', resetSettings);

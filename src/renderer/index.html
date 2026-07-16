@@ -37,6 +37,13 @@
   <!-- Live status line: grill lifecycle + surfaced notifications -->
   <div id="statusBar" class="status-bar level-off">Connecting…</div>
 
+  <!-- Sticky alert banner: important warnings stay until dismissed -->
+  <div id="alertBanner" class="alert-banner hidden">
+    <span class="ab-icon">⚠</span>
+    <span class="ab-text" id="alertText"></span>
+    <button class="ab-x" id="alertDismiss" aria-label="Dismiss alert">✕</button>
+  </div>
+
   <main id="app">
     <!-- Fault alert (only shown when the controller reports an error) -->
     <div id="errBanner" class="err-banner hidden"></div>
