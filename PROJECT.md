@@ -6,8 +6,8 @@
 -->
 # openkb-pitboss-controller — Charter
 
-**Status:** Building
-**Updated:** 2026-06-26
+**Status:** Usable
+**Updated:** 2026-07-16
 
 ## Goal
 A local, account-free desktop app to control a Pit Boss pellet grill over
@@ -31,16 +31,31 @@ v1 is done when all of these are true.
 - [ ] Auto-reconnect proven across real BLE drops (short antenna range)
 - [ ] Runs/builds from a fresh checkout (README documents how) — incl. icon build
 - [ ] Security pass run; findings fixed or accepted (SECURITY.md)
-- [ ] Notable decisions recorded (docs/adr/)
+- [x] Notable decisions recorded (docs/adr/ — 0001 process, 0002 graceful shutdown)
+
+Beyond the original v1 bar, the app grew a monitoring + fire-safety suite (see
+`docs/session-review.html` and `docs/detection-test-plan.md`):
+- [x] Per-source panels: grill + each probe with its own chart; component-activity
+  timeline (auger/fan/igniter); custom probe labels saved into each cook
+- [x] Estimated pellet level from auger run-time (refill/emptied resets)
+- [x] Anomaly detection: lid-open vs. out-of-pellets, over-temp, grease-fire flare-up
+- [x] Graceful shutdown (cool-to-200 → off → device cool-down) — prevents the
+  hopper burnback that motivated this project; **validated on the grill 2026-07-16**
+- [x] Maintenance cycles (cooks / run-hours / flare-ups) with cleaning reminders
+- [x] In-app status bar with the grill lifecycle + relayed notifications
 
 ## Now / Next
-- **Now:** Pre-first-commit. Working tree has the full Electron+sidecar stack
-  (controls, recorder, store, logging) but nothing is committed or pushed yet.
-- **Next:** First commit + initial security pass before push; verify the packaged
-  `.app` runs with the bundled `.venv`/sidecar on a clean profile; confirm the
-  macOS Bluetooth permission prompt + denied-state handling.
-- **Later:** Cross-platform packaging (Windows/Linux), cook-history viewer UI,
-  multi-grill support, signed/notarized macOS build.
+- **Now:** The monitoring + safety build is committed (9 commits) and passed its
+  first on-grill validation pass (2026-07-16): warm-up clean, lid-open caught at
+  −27°/min, and the graceful shutdown ran the full cool-to-200 → off → cool-down
+  chain on real fire.
+- **Next:** Land the three fixes the on-grill test surfaced — suppress the flare-up
+  detector during a commanded cool-down, make a cleared probe target clear its
+  warning, and add a dismissible in-app alert banner. Then calibrate the pellet
+  feed-rate, and close the remaining DoD gaps (packaged-app verify, Bluetooth
+  permission UX, auto-reconnect proof, README, security pass).
+- **Later:** Cross-platform packaging (Windows/Linux), cook-history viewer polish,
+  signed/notarized macOS build.
 
 ## Links
 Decisions: `docs/adr/` · Security: `SECURITY.md` · Usage: `README.md`

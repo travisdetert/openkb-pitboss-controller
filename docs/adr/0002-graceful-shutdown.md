@@ -6,7 +6,18 @@ Date: 2026-07-15
 
 Accepted
 
-## Context
+### The incident that motivated this
+
+This project began as a diagnosis: the grill would not come up to temperature.
+Teardown showed the **auger motor was never turning**. The root cause was a
+**burnback fire**: the grill had been powered off straight from high heat,
+without first bringing it down to ~200°F for the cool-down. Fire crept up the
+auger / pellet-tube assembly, **melted a plastic bushing in the auger housing,
+and seized the auger motor** — which then had to be replaced. So this is not a
+hypothetical hazard we are guarding against; it is the exact failure that
+started the project.
+
+### The hazard, generally
 
 Turning a pellet grill straight off from a high cooking temperature is unsafe.
 The firepot is still full of burning pellets; if the controller's cool-down fan
@@ -16,7 +27,8 @@ practice) is to bring the grill down to a low temperature (~200°F) before
 powering off, and to let the shutdown/cool-down cycle finish.
 
 Our "Turn Off" button previously sent the raw `off` command immediately, at
-whatever temperature the grill was running — the exact unsafe case.
+whatever temperature the grill was running — the exact unsafe case that caused
+the failure above.
 
 We also want the user to be able to *see* the cool-down happening and trust that
 it completed, rather than walking away unsure.

@@ -115,25 +115,48 @@ Key log signatures to watch for:
 
 ## Results log
 
+First on-grill pass — 2026-07-16, live cook to 350°F on the PB1100PSC3.
+
 | # | Test | Pass/Fail | Time-to-alert | Notes / tuning |
 |---|------|-----------|---------------|----------------|
-| T1 | Warm-up quiet | | | |
-| T2 | Steady hold | | | |
-| T3 | Probe target | | | |
-| T4 | Lid open | | | |
-| T5 | Out of pellets | | | |
-| T6 | Door vs pellets | | | |
-| T7 | Setpoint-down suppression | | | |
-| T8 | Re-arm | | | |
+| T1 | Warm-up quiet | **Pass** | — | Zero notifications climbing to 350°; auger oscillation never faked an event. |
+| T2 | Steady hold | **Pass** | — | Quiet at hold; auger ~8s-on / 16s-off cadence. |
+| T3 | Probe target | **Pass** | immediate | Probe reached/over-target fired. See bug below re: clearing the app target. |
+| T4 | Lid open | **Pass** | ~1 min | Fired at **−27°/min, 324°** (26° below 350° set); once, no double-fire; latch re-armed on recovery. Thresholds `doorRate 25` / `doorMinDrop 20` well-tuned — leave as-is. |
+| T5 | Out of pellets | *not run* | | End-of-session test; deferred. |
+| T6 | Door vs pellets | *partial* | | Door confirmed (T4); pellet side pending T5. |
+| T7 | Setpoint-down suppression | *n/a this pass* | | Not run standalone, but see the flare-up finding below (same class of gate). |
+| T8 | Re-arm | **Pass** | | Single lid alert; re-armed silently during recovery. |
+| SD | Graceful shutdown | **Pass** | | Turn Off at ~350° → `set_temp 200` (cool-down, not power-off-while-hot) → shed 328→~200° over ~18 min → `cmd:off` at 200° → device fan cool-down. The full staged chain executed on real fire. |
+
+### Bugs surfaced by this pass
+
+1. **Flare-up false-alarm during cool-down.** When the graceful shutdown lowered
+   the setpoint to 200° while the grill was still ~328°, the flare-up detector
+   fired ("possible grease fire") — temp legitimately far above the *just-lowered*
+   setpoint. Fix: suppress flare-up detection after a commanded setpoint decrease
+   until the temp settles near the new setpoint (same gate as the thermal
+   detector's setpoint-change reset).
+2. **Clearing a probe target left its warning.** The over-target warning prefers
+   the grill's own reported target over the app's, so clearing the app-side target
+   (✕) didn't clear the warning. Fix: make the app's probe warnings authoritative
+   on the app-side target.
+3. **In-app alert too fleeting.** Alerts flash ~12s in the status bar — easy to
+   miss at the grill. Fix: a dismissible alert banner that stays until acknowledged.
+4. **Shutdown pacing note.** Because "cool to 200" sets the grill to *maintain*
+   200° (auger keeps feeding), a grill that stabilizes just above the 210°
+   power-off trigger could hover. This run reached ~200° and powered off fine, but
+   consider firing `off` once *close enough* rather than requiring ≤210° exactly.
 
 ## Automated coverage
 
 The pure classifier is unit-tested independent of the grill:
 
 ```
-npm test        # builds, then runs scripts/test-thermal.mjs (12 cases)
+npm test        # builds, then runs the thermal, shutdown, and maintenance suites (~40 cases)
 ```
 
-It covers: steady = quiet, steep = door, slow = pellets, warm-up suppressed,
-`noPellets` flag deferral, and the rate-window math. The hardware tests above
-validate the thresholds against real thermal behavior that the unit test can't.
+They cover: steady = quiet, steep = door, slow = pellets, warm-up suppressed,
+`noPellets` deferral, the rate-window math, the shutdown state machine, and the
+maintenance/flare-up thresholds. The hardware tests above validate those
+thresholds against real thermal behavior that the unit tests can't.
