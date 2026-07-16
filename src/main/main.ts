@@ -8,6 +8,7 @@ import { Recorder } from './recorder';
 import { TrayManager } from './tray';
 import { advanceShutdown, beginShutdown, SHUTDOWN, ShutdownPhase } from './shutdown';
 import { maintenanceDue, maintenanceReasons } from './maintenance';
+import { resolveConfig } from './config';
 import { GrillCommand, GrillState, IPC, Settings, ShutdownMode, SidecarEvent } from '../shared/protocol';
 
 // Project root = two levels up from dist/main/.
@@ -46,8 +47,11 @@ function replayTo(wc: Electron.WebContents): void {
 // Owned by main so it survives the window being closed/hidden mid-cool-down.
 let shutdownPhase: ShutdownPhase = null;
 let shutdownCoolFrom = 0;
+let shutdownCoolTarget = SHUTDOWN.coolTarget;
 let shutdownStartedAt = 0;
 let shutdownWarned = false;
+
+const shutdownCfg = () => resolveConfig(store?.get() ?? {}).shutdown;
 
 function shutInput() {
   return {
@@ -60,7 +64,7 @@ function shutInput() {
 
 function sendShutdown(wc?: Electron.WebContents): void {
   (wc ?? win?.webContents)?.send(IPC.event, {
-    type: 'shutdown', phase: shutdownPhase, coolFrom: shutdownCoolFrom, coolTarget: SHUTDOWN.coolTarget,
+    type: 'shutdown', phase: shutdownPhase, coolFrom: shutdownCoolFrom, coolTarget: shutdownCoolTarget,
   });
 }
 
@@ -77,12 +81,14 @@ function requestShutdown(mode: ShutdownMode): void {
     return;
   }
   // mode === 'auto'
-  const step = beginShutdown(shutInput());
+  const cfg = shutdownCfg();
+  const step = beginShutdown(shutInput(), cfg);
   shutdownPhase = step.phase;
   shutdownStartedAt = Date.now();
   shutdownWarned = false;
-  shutdownCoolFrom = typeof mergedState.grillTemp === 'number' ? mergedState.grillTemp : SHUTDOWN.coolTarget;
-  if (step.action === 'cool') sidecar?.request({ cmd: 'set_temp', value: SHUTDOWN.coolTarget }).catch(() => {});
+  shutdownCoolTarget = cfg.coolTarget;
+  shutdownCoolFrom = typeof mergedState.grillTemp === 'number' ? mergedState.grillTemp : cfg.coolTarget;
+  if (step.action === 'cool') sidecar?.request({ cmd: 'set_temp', value: cfg.coolTarget }).catch(() => {});
   if (step.action === 'off') sidecar?.request({ cmd: 'off' }).catch(() => {});
   if (step.notice) notify(step.notice.title, step.notice.body);
   sendShutdown();
@@ -91,12 +97,13 @@ function requestShutdown(mode: ShutdownMode): void {
 // Advance the shutdown machine on each fresh grill state.
 function driveShutdown(): void {
   if (!shutdownPhase) return;
-  const step = advanceShutdown(shutdownPhase, shutInput());
+  const cfg = shutdownCfg();
+  const step = advanceShutdown(shutdownPhase, shutInput(), cfg);
   if (step.action === 'off') sidecar?.request({ cmd: 'off' }).catch(() => {});
   if (step.notice) notify(step.notice.title, step.notice.body);
   if (step.phase !== shutdownPhase) { shutdownPhase = step.phase; sendShutdown(); }
   else if (shutdownPhase === 'cooling') sendShutdown();  // push progress
-  if (shutdownPhase && Date.now() - shutdownStartedAt > SHUTDOWN.stallMs && !shutdownWarned) {
+  if (shutdownPhase && Date.now() - shutdownStartedAt > cfg.stallMs && !shutdownWarned) {
     shutdownWarned = true;
     notify('Shutdown taking a while', "The cool-down hasn't finished — check the grill.");
   }

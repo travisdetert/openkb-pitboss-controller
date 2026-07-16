@@ -16,8 +16,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { CookMeta, GrillState, MaintenanceState, NoticeLevel, Sample } from '../shared/protocol';
 import { SettingsStore } from './store';
-import { classifyThermal, TempPoint, THERMAL } from './thermal';
-import { freshMaintenance, isFlareup, maintenanceDue, maintenanceReasons } from './maintenance';
+import { classifyThermal, TempPoint, THERMAL, ThermalThresholds } from './thermal';
+import { freshMaintenance, isFlareup, maintenanceDue, maintenanceReasons, MaintenanceThresholds } from './maintenance';
+import { resolveConfig } from './config';
 import { log } from './log';
 
 const SAMPLE_INTERVAL_MS = 5_000;   // at most one recorded point per 5s
@@ -64,6 +65,10 @@ export class Recorder {
   private lastMaintSaveAt = 0;
   private flareupFired = false;
   private cleaningDueFired = false;
+  // Suppress flare-up detection while a commanded setpoint drop (shutdown, or the
+  // user lowering it) means the temp is legitimately above the new lower setpoint.
+  private flareLastSet: number | null = null;
+  private flareSuppressed = false;
   onMaintenance?: (state: MaintenanceState, due: boolean, reasons: string[]) => void;
 
   // Thermal-anomaly detection (see thermal.ts): a rolling temp buffer plus
@@ -104,12 +109,13 @@ export class Recorder {
     if (state.fanState) this.fanSeen = true;
     if (state.hotState) this.igniterSeen = true;
 
+    const cfg = resolveConfig(this.store.get());
     this.handleCookLifecycle(state, now);
     if (this.cookId) this.maybeSample(state, now);
     this.checkAlerts(state);
-    this.checkThermal(state, now);
+    this.checkThermal(state, now, cfg.thermal);
     this.checkPowerState(state);
-    this.checkMaintenance(state, now);
+    this.checkMaintenance(state, now, cfg.maintenance);
     this.logTransitions(state);
     this.prev = { ...this.prev, ...state };
   }
@@ -118,16 +124,30 @@ export class Recorder {
 
   // Accumulate run-time, count flare-ups (possible grease fires), and nudge the
   // user to clean once usage or flare-ups cross a threshold.
-  private checkMaintenance(state: GrillState, now: number): void {
+  private checkMaintenance(state: GrillState, now: number, mt: MaintenanceThresholds): void {
     // Integrate grill-on time.
     if (this.lastObserveAt && state.moduleIsOn) {
       this.maint.runSecondsSinceClean += Math.min(now - this.lastObserveAt, 10_000) / 1000;
     }
     this.lastObserveAt = now;
 
+    const t = typeof state.grillTemp === 'number' ? state.grillTemp : null;
+    const set = typeof state.grillSetTemp === 'number' ? state.grillSetTemp : null;
+
+    // A commanded setpoint *drop* (shutdown cool-down, or the user lowering it)
+    // leaves the temp legitimately above the new setpoint — not a flare-up.
+    // Suppress until the temp settles back near the (lower) setpoint.
+    if (set != null) {
+      if (this.flareLastSet != null && set < this.flareLastSet) this.flareSuppressed = true;
+      this.flareLastSet = set;
+    }
+    if (this.flareSuppressed && t != null && set != null && t <= set + 25) {
+      this.flareSuppressed = false;
+    }
+
     // Flare-up: temp spikes well above setpoint while running (possible grease
     // fire). Edge-triggered; re-arms once temp settles back toward the setpoint.
-    const flaring = isFlareup(state.grillTemp ?? null, state.grillSetTemp ?? null, !!state.moduleIsOn);
+    const flaring = !this.flareSuppressed && isFlareup(t, set, !!state.moduleIsOn, mt);
     if (flaring) {
       if (!this.flareupFired) {
         this.flareupFired = true;
@@ -136,17 +156,16 @@ export class Recorder {
           `Grill hit ${state.grillTemp}° (set ${state.grillSetTemp}°) — possible grease fire. Keep an eye on it and clean the grease tray/bucket soon.`, true);
         this.emitMaintenance();
       }
-    } else if (typeof state.grillTemp === 'number' && typeof state.grillSetTemp === 'number'
-               && state.grillTemp < state.grillSetTemp + 50) {
+    } else if (t != null && set != null && t < set + 50) {
       this.flareupFired = false;
     }
 
     // Recommend a clean once due (once, until reset via "Cleaned").
-    if (maintenanceDue(this.maint)) {
+    if (maintenanceDue(this.maint, mt)) {
       if (!this.cleaningDueFired) {
         this.cleaningDueFired = true;
         this.notify('Time to clean the grill',
-          `Recommended after ${maintenanceReasons(this.maint).join(' · ')} since the last clean.`);
+          `Recommended after ${maintenanceReasons(this.maint, mt).join(' · ')} since the last clean.`);
         this.emitMaintenance();
       }
     }
@@ -160,7 +179,8 @@ export class Recorder {
   }
 
   private emitMaintenance(): void {
-    this.onMaintenance?.(this.maint, maintenanceDue(this.maint), maintenanceReasons(this.maint));
+    const mt = resolveConfig(this.store.get()).maintenance;
+    this.onMaintenance?.(this.maint, maintenanceDue(this.maint, mt), maintenanceReasons(this.maint, mt));
   }
 
   private persistMaintenance(): void {
@@ -277,9 +297,10 @@ export class Recorder {
     const labels = settings.probeLabels || {};
     for (let i = 1; i <= PROBE_COUNT; i++) {
       const cur = probeTemp(state, i);
-      // Prefer the grill's OWN target (what triggers its "IT" alert) so our
-      // notification fires at the same instant; fall back to the user's value.
-      const target = this.grillProbeTarget(state, i) ?? userTargets[i];
+      // Key off the target the user manages in the app (setting it also pushes it
+      // to the grill). Clearing it here stops the warning — the grill's own copy
+      // is not preferred, so a cleared target doesn't linger.
+      const target = userTargets[i];
       if (cur == null || !target) continue;
       const name = labels[i]?.trim() || `Probe ${i}`;
       if (cur >= target) {
@@ -327,7 +348,7 @@ export class Recorder {
   // fire / out-of-pellets (slow sustained decline below setpoint). Only judged
   // once the grill has reached temp, so warm-up and setpoint changes don't
   // false-alarm. See thermal.ts for the thresholds and rationale.
-  private checkThermal(state: GrillState, now: number): void {
+  private checkThermal(state: GrillState, now: number, th: ThermalThresholds): void {
     const on = !!state.moduleIsOn;
     const set = typeof state.grillSetTemp === 'number' ? state.grillSetTemp : null;
     const temp = typeof state.grillTemp === 'number' ? state.grillTemp : null;
@@ -349,19 +370,19 @@ export class Recorder {
       this.doorFired = this.pelletLowFired = false;
       this.tempHist = [];
     }
-    if (temp >= set - THERMAL.atTempBand) this.atTemp = true;
+    if (temp >= set - th.atTempBand) this.atTemp = true;
 
     // Feed the trend buffer (throttled) and prune to the retention window.
-    if (now - this.lastThermalAt >= THERMAL.sampleMs) {
+    if (now - this.lastThermalAt >= th.sampleMs) {
       this.lastThermalAt = now;
       this.tempHist.push({ t: now, v: temp });
-      const cutoff = now - THERMAL.windowMs;
+      const cutoff = now - th.windowMs;
       while (this.tempHist.length && this.tempHist[0].t < cutoff) this.tempHist.shift();
     }
 
     const v = classifyThermal({
       now, hist: this.tempHist, setTemp: set, grillTemp: temp,
-      atTemp: this.atTemp, noPellets: !!state.noPellets, doorActive: this.doorFired,
+      atTemp: this.atTemp, noPellets: !!state.noPellets, doorActive: this.doorFired, th,
     });
 
     // Lid/door open — steep drop. Latch until temp recovers toward setpoint.
@@ -371,7 +392,7 @@ export class Recorder {
         this.notify('Lid open?',
           `Grill temp is dropping fast (${Math.round(v.shortRate ?? 0)}°/min, now ${temp}°). Close the lid to hold heat.`);
       }
-    } else if (v.dev < THERMAL.doorRecover) {
+    } else if (v.dev < th.doorRecover) {
       this.doorFired = false;
     }
 
@@ -382,7 +403,7 @@ export class Recorder {
         this.notify('Running low on pellets?',
           `Temp has fallen to ${temp}° (set ${set}°) and keeps dropping — check the hopper and firepot.`);
       }
-    } else if (v.dev < THERMAL.pelletRecover) {
+    } else if (v.dev < th.pelletRecover) {
       this.pelletLowFired = false;
     }
   }
@@ -406,13 +427,6 @@ export class Recorder {
     }
   }
 
-  // The grill reports a target only for probe 1 (p1Target). 960 is pytboss's
-  // "unset / unplugged" sentinel; ignore it and implausible values.
-  private grillProbeTarget(state: GrillState, i: number): number | null {
-    const v = (state as Record<string, unknown>)[`p${i}Target`];
-    if (typeof v !== 'number' || v === 960 || v < 50 || v > 600) return null;
-    return v;
-  }
 
   private describeErrors(state: GrillState): string {
     const errs: string[] = [];

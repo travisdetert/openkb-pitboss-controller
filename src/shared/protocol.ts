@@ -97,7 +97,14 @@ export interface Settings {
   windowBounds?: { x?: number; y?: number; width: number; height: number };
   pellets?: PelletState;
   maintenance?: MaintenanceState;
+  // User-adjustable tuning (see src/main/config.ts for how these resolve to the
+  // engine thresholds). All optional — absent means "use the built-in default".
+  detectionSensitivity?: DetectionSensitivity;
+  maintenanceThresholds?: { afterCooks: number; afterHours: number; afterFlareups: number };
+  shutdownConfig?: { coolAbove: number; coolTarget: number };
 }
+
+export type DetectionSensitivity = 'relaxed' | 'standard' | 'sensitive';
 
 // Cleaning/maintenance counters since the last "Cleaned" reset.
 export interface MaintenanceState {

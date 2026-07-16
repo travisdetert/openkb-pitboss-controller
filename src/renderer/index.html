@@ -31,6 +31,7 @@
     <button id="lightBtn" class="btn btn-ghost hidden">Light</button>
     <button id="primeBtn" class="btn btn-ghost">Prime</button>
     <button id="refreshBtn" class="btn btn-ghost">Refresh</button>
+    <button id="settingsBtn" class="btn btn-ghost">Settings</button>
   </div>
 
   <!-- Live status line: grill lifecycle + surfaced notifications -->
@@ -90,6 +91,49 @@
   </main>
 
   <div id="toast" class="toast hidden"></div>
+
+  <!-- Settings -->
+  <div id="settingsOverlay" class="modal-overlay hidden">
+    <div class="modal" role="dialog" aria-modal="true" aria-label="Settings">
+      <div class="modal-head">
+        <span class="modal-title">Settings</span>
+        <button id="settingsClose" class="modal-x" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <section class="cfg-sec">
+          <h3>Pellets</h3>
+          <div class="cfg-row"><label for="cfgCapacity">Hopper capacity (lb)</label><input type="number" id="cfgCapacity" min="1" max="60" step="1" /></div>
+          <div class="cfg-row"><label for="cfgFeed">Feed rate (lb / auger-hour)</label><input type="number" id="cfgFeed" min="1" max="30" step="0.5" /></div>
+          <p class="cfg-hint">Calibrate to your grill — if the estimate empties too fast, lower the feed rate.</p>
+        </section>
+        <section class="cfg-sec">
+          <h3>Cleaning reminders</h3>
+          <div class="cfg-row"><label for="cfgCooks">After cooks</label><input type="number" id="cfgCooks" min="1" max="100" step="1" /></div>
+          <div class="cfg-row"><label for="cfgHours">After hours of use</label><input type="number" id="cfgHours" min="1" max="500" step="1" /></div>
+          <div class="cfg-row"><label for="cfgFlares">After flare-ups</label><input type="number" id="cfgFlares" min="1" max="50" step="1" /></div>
+        </section>
+        <section class="cfg-sec">
+          <h3>Shutdown</h3>
+          <div class="cfg-row"><label for="cfgCoolTarget">Cool down to (°F)</label><input type="number" id="cfgCoolTarget" min="150" max="300" step="5" /></div>
+          <div class="cfg-row"><label for="cfgCoolAbove">Only pre-cool above (°F)</label><input type="number" id="cfgCoolAbove" min="160" max="500" step="5" /></div>
+          <p class="cfg-hint">Below the threshold, Turn Off powers down right away and the grill runs its own cool-down.</p>
+        </section>
+        <section class="cfg-sec">
+          <h3>Detection sensitivity</h3>
+          <div class="cfg-seg" id="cfgSensitivity">
+            <button type="button" data-sens="relaxed">Relaxed</button>
+            <button type="button" data-sens="standard">Standard</button>
+            <button type="button" data-sens="sensitive">Sensitive</button>
+          </div>
+          <p class="cfg-hint">Tunes the lid-open, low-pellet and flare-up warnings. Relaxed = fewer alerts; Sensitive = earlier. Lowering it reduces the safety warnings.</p>
+        </section>
+      </div>
+      <div class="modal-foot">
+        <button id="settingsReset" class="btn btn-ghost">Reset to defaults</button>
+        <button id="settingsSave" class="btn btn-save">Save</button>
+      </div>
+    </div>
+  </div>
 
   <script src="./renderer.js"></script>
 </body>

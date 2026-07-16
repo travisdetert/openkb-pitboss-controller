@@ -23,21 +23,28 @@ export interface ShutdownStep {
   notice: { title: string; body: string } | null;
 }
 
-export const SHUTDOWN = {
-  coolAbove: 250,     // above this, ramp down before powering off
-  coolTarget: 200,    // ramp-down setpoint
-  coolDoneAt: 210,    // once at/below this, proceed to power off
+export interface ShutdownConfig {
+  coolAbove: number;   // above this, ramp down before powering off
+  coolTarget: number;  // ramp-down setpoint
+  coolDoneAt: number;  // once at/below this, proceed to power off
+  stallMs: number;
+}
+
+export const SHUTDOWN: ShutdownConfig = {
+  coolAbove: 250,
+  coolTarget: 200,
+  coolDoneAt: 210,
   stallMs: 30 * 60_000,
 };
 
 // Decide the first step when the user asks to shut down.
-export function beginShutdown(inp: ShutdownInput): ShutdownStep {
-  if (inp.moduleIsOn && typeof inp.grillTemp === 'number' && inp.grillTemp > SHUTDOWN.coolAbove) {
+export function beginShutdown(inp: ShutdownInput, cfg: ShutdownConfig = SHUTDOWN): ShutdownStep {
+  if (inp.moduleIsOn && typeof inp.grillTemp === 'number' && inp.grillTemp > cfg.coolAbove) {
     return {
       phase: 'cooling', action: 'cool',
       notice: {
         title: 'Cooling down before shutdown',
-        body: `Bringing the grill from ${inp.grillTemp}° to ${SHUTDOWN.coolTarget}° first — this prevents a hopper flare-up.`,
+        body: `Bringing the grill from ${inp.grillTemp}° to ${cfg.coolTarget}° first — this prevents a hopper flare-up.`,
       },
     };
   }
@@ -48,9 +55,9 @@ export function beginShutdown(inp: ShutdownInput): ShutdownStep {
 }
 
 // Advance the machine on each fresh grill state.
-export function advanceShutdown(phase: ShutdownPhase, inp: ShutdownInput): ShutdownStep {
+export function advanceShutdown(phase: ShutdownPhase, inp: ShutdownInput, cfg: ShutdownConfig = SHUTDOWN): ShutdownStep {
   if (phase === 'cooling') {
-    if (typeof inp.grillTemp === 'number' && inp.grillTemp <= SHUTDOWN.coolDoneAt) {
+    if (typeof inp.grillTemp === 'number' && inp.grillTemp <= cfg.coolDoneAt) {
       return {
         phase: 'finishing', action: 'off',
         notice: {

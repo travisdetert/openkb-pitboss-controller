@@ -36,7 +36,11 @@ interface Settings {
   grillModel: string;
   pellets?: PelletState;
   maintenance?: MaintenanceState;
+  detectionSensitivity?: Sensitivity;
+  maintenanceThresholds?: { afterCooks: number; afterHours: number; afterFlareups: number };
+  shutdownConfig?: { coolAbove: number; coolTarget: number };
 }
+type Sensitivity = 'relaxed' | 'standard' | 'sensitive';
 interface Sample {
   t: number;
   grillTemp: number | null;
@@ -172,6 +176,13 @@ let lastPelletSaveT = 0;     // throttle persistence of augerSeconds
 let maint: MaintenanceState | null = null;
 let maintDue = false;
 let maintReasons: string[] = [];
+
+// User-adjustable tuning (edited in the Settings modal; defaults mirror the
+// engine defaults in main). Persisted and read live by main.
+let detectionSensitivity: Sensitivity = 'standard';
+const maintenanceThresholds = { afterCooks: 5, afterHours: 30, afterFlareups: 3 };
+const shutdownConfig = { coolAbove: 250, coolTarget: 200 };
+let pendingSens: Sensitivity = 'standard';
 
 const unit = () => (state.isFahrenheit === false ? '°C' : '°F');
 
@@ -651,13 +662,6 @@ async function hydrateHistory(): Promise<void> {
   renderChart();
 }
 
-// The grill only reports a target for probe 1 (p1Target). 960 is pytboss's
-// "unset / probe unplugged" sentinel; ignore it and other implausible values.
-function grillProbeTarget(i: number): number | null {
-  const v = (state as any)[`p${i}Target`] as number | null | undefined;
-  if (v == null || v === 960 || v < 50 || v > 600) return null;
-  return v;
-}
 
 // Rough "hours of pellets left" from the recent auger duty cycle. Conservative
 // (the 5s auger flags over-count brief pulses, so the estimate runs short).
@@ -733,8 +737,8 @@ function renderState(): void {
     if (panel) panel.classList.toggle('hidden', i > SETTABLE_PROBES && v == null);
     tempEl.innerHTML = (v != null ? String(v) : '--') + `<span class="pu">${unit()}</span>`;
 
-    // Prefer the grill's OWN target (what drives its "IT" alert) over the app's.
-    const target = grillProbeTarget(i) ?? probeTargets[i] ?? null;
+    // Key off the target the user set in the app — clearing it clears the warning.
+    const target = probeTargets[i] ?? null;
     const reached = v != null && target != null && v >= target;
     const over = v != null && target != null && v >= target + OVER_TARGET_MARGIN;
     tempEl.classList.toggle('reached', reached && !over);
@@ -963,11 +967,74 @@ function handleEvent(evt: SidecarEvent): void {
   }
 }
 
+// ---- settings modal --------------------------------------------------------
+function setSensButtons(s: Sensitivity): void {
+  document.querySelectorAll<HTMLButtonElement>('#cfgSensitivity button')
+    .forEach((b) => b.classList.toggle('active', b.dataset.sens === s));
+}
+function setInput(id: string, v: number | string): void {
+  const el = document.getElementById(id) as HTMLInputElement | null;
+  if (el) el.value = String(v);
+}
+function getNum(id: string, lo: number, hi: number, dflt: number): number {
+  const v = Number((document.getElementById(id) as HTMLInputElement)?.value);
+  return Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : dflt;
+}
+function openSettings(): void {
+  setInput('cfgCapacity', pellets.capacityLbs);
+  setInput('cfgFeed', pellets.feedRateLbsPerHr);
+  setInput('cfgCooks', maintenanceThresholds.afterCooks);
+  setInput('cfgHours', maintenanceThresholds.afterHours);
+  setInput('cfgFlares', maintenanceThresholds.afterFlareups);
+  setInput('cfgCoolTarget', shutdownConfig.coolTarget);
+  setInput('cfgCoolAbove', shutdownConfig.coolAbove);
+  pendingSens = detectionSensitivity;
+  setSensButtons(pendingSens);
+  $('settingsOverlay').classList.remove('hidden');
+}
+function closeSettings(): void { $('settingsOverlay').classList.add('hidden'); }
+function resetSettings(): void {
+  setInput('cfgCapacity', 20); setInput('cfgFeed', 8);
+  setInput('cfgCooks', 5); setInput('cfgHours', 30); setInput('cfgFlares', 3);
+  setInput('cfgCoolTarget', 200); setInput('cfgCoolAbove', 250);
+  pendingSens = 'standard'; setSensButtons('standard');
+}
+function saveSettings(): void {
+  pellets.capacityLbs = getNum('cfgCapacity', 1, 60, 20);
+  pellets.feedRateLbsPerHr = getNum('cfgFeed', 1, 30, 8);
+  maintenanceThresholds.afterCooks = getNum('cfgCooks', 1, 100, 5);
+  maintenanceThresholds.afterHours = getNum('cfgHours', 1, 500, 30);
+  maintenanceThresholds.afterFlareups = getNum('cfgFlares', 1, 50, 3);
+  shutdownConfig.coolTarget = getNum('cfgCoolTarget', 150, 300, 200);
+  shutdownConfig.coolAbove = Math.max(shutdownConfig.coolTarget + 10, getNum('cfgCoolAbove', 160, 500, 250));
+  detectionSensitivity = pendingSens;
+  persist({ pellets, maintenanceThresholds, shutdownConfig, detectionSensitivity });
+  renderPellets();
+  closeSettings();
+  toast('Settings saved');
+}
+function wireSettings(): void {
+  $('settingsBtn').addEventListener('click', openSettings);
+  $('settingsClose').addEventListener('click', closeSettings);
+  $('settingsReset').addEventListener('click', resetSettings);
+  $('settingsSave').addEventListener('click', saveSettings);
+  $('settingsOverlay').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('settingsOverlay')) closeSettings();
+  });
+  document.querySelectorAll<HTMLButtonElement>('#cfgSensitivity button').forEach((b) => {
+    b.addEventListener('click', () => { pendingSens = (b.dataset.sens as Sensitivity); setSensButtons(pendingSens); });
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !$('settingsOverlay').classList.contains('hidden')) closeSettings();
+  });
+}
+
 // ---- boot ------------------------------------------------------------------
 async function boot(): Promise<void> {
   window.pitboss.onEvent(handleEvent);
   wireControls();
   wireChart();
+  wireSettings();
 
   // Restore remembered settings before first render / connect.
   try {
@@ -982,6 +1049,9 @@ async function boot(): Promise<void> {
     if (s.probeLabels) Object.assign(probeLabels, s.probeLabels);
     if (s.pellets) Object.assign(pellets, s.pellets);
     if (s.maintenance) { maint = s.maintenance; renderMaintenance(); }
+    if (s.detectionSensitivity) detectionSensitivity = s.detectionSensitivity;
+    if (s.maintenanceThresholds) Object.assign(maintenanceThresholds, s.maintenanceThresholds);
+    if (s.shutdownConfig) Object.assign(shutdownConfig, s.shutdownConfig);
     if (s.grillName) grillName = s.grillName;
     if (s.grillModel) grillModel = s.grillModel;
   } catch { /* defaults are fine */ }
