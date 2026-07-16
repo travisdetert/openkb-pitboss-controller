@@ -13,6 +13,8 @@ const IPC = {
   readCook: 'pitboss:cooks:read',
   shutdown: 'pitboss:shutdown',
   cleaned: 'pitboss:cleaned',
+  getLoginItem: 'pitboss:login:get',
+  setLoginItem: 'pitboss:login:set',
 } as const;
 
 type GrillCommand =
@@ -50,6 +52,8 @@ const api = {
   readCook: (id: string) => ipcRenderer.invoke(IPC.readCook, id),
   shutdown: (mode: string) => ipcRenderer.invoke(IPC.shutdown, mode),
   cleaned: () => ipcRenderer.invoke(IPC.cleaned),
+  getLoginItem: () => ipcRenderer.invoke(IPC.getLoginItem),
+  setLoginItem: (open: boolean) => ipcRenderer.invoke(IPC.setLoginItem, open),
 
   onEvent: (cb: (evt: unknown) => void) => {
     const listener = (_e: unknown, evt: unknown) => cb(evt);

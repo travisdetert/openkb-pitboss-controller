@@ -185,6 +185,8 @@ main > * { width: 100%; max-width: 760px; }
   border-radius: 8px; padding: 8px; font-size: 13px; cursor: pointer; }
 .cfg-seg button:hover { border-color: var(--flame-dim); }
 .cfg-seg button.active { background: var(--flame); border-color: var(--flame); color: #1a1208; font-weight: 700; }
+.cfg-check { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--text); cursor: pointer; }
+.cfg-check input { width: 16px; height: 16px; accent-color: var(--flame); cursor: pointer; }
 .modal-foot { display: flex; justify-content: space-between; gap: 10px; padding: 14px 18px; border-top: 1px solid var(--border); }
 .modal-foot .btn { flex: 0 0 auto; padding: 9px 16px; }
 .btn-save { background: var(--flame); border-color: var(--flame); color: #1a1208; }

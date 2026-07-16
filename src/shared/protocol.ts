@@ -160,6 +160,8 @@ export const IPC = {
   readCook: 'pitboss:cooks:read',  // full sample array for one cook id
   shutdown: 'pitboss:shutdown',    // renderer -> main: 'auto' | 'now' | 'cancel'
   cleaned: 'pitboss:cleaned',      // renderer -> main: reset maintenance counters
+  getLoginItem: 'pitboss:login:get',
+  setLoginItem: 'pitboss:login:set',
 } as const;
 
 export type ShutdownMode = 'auto' | 'now' | 'cancel';

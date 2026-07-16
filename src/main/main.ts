@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Notification } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, Notification, shell } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import { initLogging, attachRendererConsole, log } from './log';
@@ -9,7 +9,7 @@ import { TrayManager } from './tray';
 import { advanceShutdown, beginShutdown, SHUTDOWN, ShutdownPhase } from './shutdown';
 import { maintenanceDue, maintenanceReasons } from './maintenance';
 import { resolveConfig } from './config';
-import { GrillCommand, GrillState, IPC, Settings, ShutdownMode, SidecarEvent } from '../shared/protocol';
+import { GrillCommand, GrillState, IPC, NoticeLevel, Settings, ShutdownMode, SidecarEvent } from '../shared/protocol';
 
 // Project root = two levels up from dist/main/.
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
@@ -204,6 +204,7 @@ function startSidecar(): void {
       recorder?.observe(evt.data);
       driveShutdown();
       tray?.setState(evt.data);
+      tray?.setLabels(store?.get().probeLabels);
     } else if (evt.type === 'capabilities') {
       lastCaps = evt;
     } else if (evt.type === 'status') {
@@ -222,11 +223,36 @@ function startSidecar(): void {
   sidecar.start();
 }
 
-function notify(title: string, body: string): void {
-  win?.webContents.send(IPC.event, { type: 'notice', title, body, level: 'info' });
-  if (!Notification.isSupported()) return;
-  try { new Notification({ title, body }).show(); }
-  catch (e) { log('notification failed:', (e as Error).message); }
+/** Bring the window to the front (creating it if needed) — used on notification
+ * click and from the dock/tray menus. */
+function showWindow(): void {
+  if (!win) { createWindow(); return; }
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+}
+
+// Single, enriched notification path used by both main and the recorder. Alerts
+// play a sound, stay on screen until dismissed, and bounce the dock; every
+// notice is logged and relayed to the in-app status bar + banner.
+function notify(title: string, body: string, level: NoticeLevel = 'info'): void {
+  log(`notify: ${title} — ${body}`);
+  win?.webContents.send(IPC.event, { type: 'notice', title, body, level });
+
+  const alert = level === 'alert';
+  if (process.platform === 'darwin' && app.dock) {
+    try { app.dock.bounce(alert ? 'critical' : 'informational'); } catch { /* non-fatal */ }
+  }
+  if (Notification.isSupported()) {
+    try {
+      const n = new Notification({ title, body, silent: !alert, timeoutType: alert ? 'never' : 'default' });
+      n.on('click', () => showWindow());       // clicking the banner focuses the app
+      n.show();
+    } catch (e) {
+      log('notification failed:', (e as Error).message);
+    }
+  }
+  if (alert) { try { shell.beep(); } catch { /* non-fatal */ } }
 }
 
 app.whenReady().then(() => {
@@ -239,9 +265,8 @@ app.whenReady().then(() => {
   }
   store = new SettingsStore();
   recorder = new Recorder(store);
-  // Relay the recorder's notifications into the renderer's status bar.
-  recorder.onNotice = (title, body, level) =>
-    win?.webContents.send(IPC.event, { type: 'notice', title, body, level });
+  // Route the recorder's notifications through the enriched OS-notification path.
+  recorder.onNotice = (title, body, level) => notify(title, body, level);
   // Relay maintenance counters so the renderer can show the cleaning reminder.
   recorder.onMaintenance = (state, due, reasons) =>
     win?.webContents.send(IPC.event, { type: 'maintenance', state, due, reasons });
@@ -250,6 +275,15 @@ app.whenReady().then(() => {
     turnOff: () => requestShutdown('auto'),
   });
   tray.init();
+
+  // Dock right-click menu (macOS): the same quick actions as the tray.
+  if (process.platform === 'darwin' && app.dock) {
+    app.dock.setMenu(Menu.buildFromTemplate([
+      { label: 'Open Pit Boss', click: () => showWindow() },
+      { label: 'Turn Off Grill', click: () => requestShutdown('auto') },
+    ]));
+  }
+
   startSidecar();
   createWindow();
 
@@ -269,6 +303,14 @@ app.whenReady().then(() => {
   ipcMain.handle(IPC.readCook, (_e, id: string) => recorder!.readCook(id));
   ipcMain.handle(IPC.shutdown, (_e, mode: ShutdownMode) => { requestShutdown(mode); });
   ipcMain.handle(IPC.cleaned, () => { recorder!.resetMaintenance(); });
+
+  // Start-at-login is OS-owned — read/write it straight from the OS, never a
+  // shadow copy in settings.json.
+  ipcMain.handle(IPC.getLoginItem, () => app.getLoginItemSettings().openAtLogin);
+  ipcMain.handle(IPC.setLoginItem, (_e, open: boolean) => {
+    app.setLoginItemSettings({ openAtLogin: !!open });
+    return app.getLoginItemSettings().openAtLogin;
+  });
 
   app.on('activate', () => {
     // Dock/Tray click: recreate the window if gone, otherwise un-hide it.

@@ -11,7 +11,7 @@
 // Probe/grill targets come from the SettingsStore, which the renderer keeps in
 // sync as the user adjusts them — so we always compare against the live target.
 
-import { app, Notification, shell } from 'electron';
+import { app } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import { CookMeta, GrillState, MaintenanceState, NoticeLevel, Sample } from '../shared/protocol';
@@ -441,21 +441,11 @@ export class Recorder {
   // Set by main to relay notifications to the renderer's status bar.
   onNotice?: (title: string, body: string, level: NoticeLevel) => void;
 
+  // Hand off to main (via onNotice), which owns the single enriched
+  // OS-notification path (click-to-focus, sound + persistence for alerts, dock
+  // bounce) and logging. The recorder no longer creates notifications itself.
   private notify(title: string, body: string, beep = false): void {
-    log(`notify: ${title} — ${body}`);
-    // Surface it in-app too (the status bar), not just as an OS notification.
     this.onNotice?.(title, body, beep ? 'alert' : 'warn');
-    // An audible cue for "meat is done", to match the grill's own beep. The
-    // OS notification carries the default sound; shell.beep() adds emphasis.
-    if (beep) {
-      try { shell.beep(); } catch { /* non-fatal */ }
-    }
-    if (!Notification.isSupported()) return;
-    try {
-      new Notification({ title, body, silent: !beep }).show();
-    } catch (e) {
-      log('notification failed:', (e as Error).message);
-    }
   }
 
   // --- queries (for IPC) ---------------------------------------------------

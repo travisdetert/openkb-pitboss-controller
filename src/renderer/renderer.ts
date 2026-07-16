@@ -87,6 +87,8 @@ interface PitbossApi {
   readCook(id: string): Promise<Sample[]>;
   shutdown(mode: 'auto' | 'now' | 'cancel'): Promise<unknown>;
   cleaned(): Promise<unknown>;
+  getLoginItem(): Promise<boolean>;
+  setLoginItem(open: boolean): Promise<boolean>;
   onEvent(cb: (evt: SidecarEvent) => void): () => void;
 }
 interface Window { pitboss: PitbossApi; }
@@ -1004,6 +1006,11 @@ function openSettings(): void {
   setInput('cfgCoolAbove', shutdownConfig.coolAbove);
   pendingSens = detectionSensitivity;
   setSensButtons(pendingSens);
+  // Start-at-login is OS-owned; read the current truth each time we open.
+  void window.pitboss.getLoginItem().then((on) => {
+    const el = document.getElementById('cfgLogin') as HTMLInputElement | null;
+    if (el) el.checked = !!on;
+  });
   $('settingsOverlay').classList.remove('hidden');
 }
 function closeSettings(): void { $('settingsOverlay').classList.add('hidden'); }
@@ -1023,6 +1030,8 @@ function saveSettings(): void {
   shutdownConfig.coolAbove = Math.max(shutdownConfig.coolTarget + 10, getNum('cfgCoolAbove', 160, 500, 250));
   detectionSensitivity = pendingSens;
   persist({ pellets, maintenanceThresholds, shutdownConfig, detectionSensitivity });
+  const login = document.getElementById('cfgLogin') as HTMLInputElement | null;
+  if (login) void window.pitboss.setLoginItem(login.checked);
   renderPellets();
   closeSettings();
   toast('Settings saved');

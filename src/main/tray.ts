@@ -17,6 +17,7 @@ export class TrayManager {
   private connected = false;
   private connecting = false;
   private device?: string;
+  private labels: Record<number, string> = {};
 
   constructor(private readonly iconPath: string, private readonly cb: TrayCallbacks) {}
 
@@ -31,6 +32,11 @@ export class TrayManager {
 
   setState(s: GrillState): void {
     this.state = { ...this.state, ...s };
+    this.refresh();
+  }
+
+  setLabels(labels: Record<number, string> | undefined): void {
+    this.labels = labels ?? {};
     this.refresh();
   }
 
@@ -69,7 +75,8 @@ export class TrayManager {
     for (let i = 1; i <= 4; i++) {
       const v = (this.state as Record<string, unknown>)[`p${i}Temp`];
       if (typeof v === 'number') {
-        probeItems.push({ label: `Probe ${i}:  ${v}${u}`, enabled: false });
+        const name = this.labels[i]?.trim() || `Probe ${i}`;
+        probeItems.push({ label: `${name}:  ${v}${u}`, enabled: false });
       }
     }
 
