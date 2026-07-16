@@ -66,7 +66,9 @@ export type SidecarEvent =
   | { type: 'error'; id?: number; ok: false; message: string }
   // main -> renderer relay of a fired notification, so the in-app status bar can
   // surface it (lid open, probe done, pellets, …) alongside the OS notification.
-  | { type: 'notice'; title: string; body: string; level: NoticeLevel };
+  | { type: 'notice'; title: string; body: string; level: NoticeLevel }
+  // main -> renderer graceful-shutdown progress (null phase = not shutting down).
+  | { type: 'shutdown'; phase: 'cooling' | 'finishing' | null; coolFrom: number; coolTarget: number };
 
 export type NoticeLevel = 'info' | 'warn' | 'alert';
 
@@ -138,4 +140,7 @@ export const IPC = {
   history: 'pitboss:history',      // samples for the active (or latest) cook
   listCooks: 'pitboss:cooks:list',
   readCook: 'pitboss:cooks:read',  // full sample array for one cook id
+  shutdown: 'pitboss:shutdown',    // renderer -> main: 'auto' | 'now' | 'cancel'
 } as const;
+
+export type ShutdownMode = 'auto' | 'now' | 'cancel';

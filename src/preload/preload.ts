@@ -11,6 +11,7 @@ const IPC = {
   history: 'pitboss:history',
   listCooks: 'pitboss:cooks:list',
   readCook: 'pitboss:cooks:read',
+  shutdown: 'pitboss:shutdown',
 } as const;
 
 type GrillCommand =
@@ -46,6 +47,7 @@ const api = {
   getHistory: () => ipcRenderer.invoke(IPC.history),
   listCooks: () => ipcRenderer.invoke(IPC.listCooks),
   readCook: (id: string) => ipcRenderer.invoke(IPC.readCook, id),
+  shutdown: (mode: string) => ipcRenderer.invoke(IPC.shutdown, mode),
 
   onEvent: (cb: (evt: unknown) => void) => {
     const listener = (_e: unknown, evt: unknown) => cb(evt);

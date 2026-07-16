@@ -6,7 +6,8 @@ import { Sidecar } from './sidecar';
 import { SettingsStore } from './store';
 import { Recorder } from './recorder';
 import { TrayManager } from './tray';
-import { GrillCommand, GrillState, IPC, Settings, SidecarEvent } from '../shared/protocol';
+import { advanceShutdown, beginShutdown, SHUTDOWN, ShutdownPhase } from './shutdown';
+import { GrillCommand, GrillState, IPC, Settings, ShutdownMode, SidecarEvent } from '../shared/protocol';
 
 // Project root = two levels up from dist/main/.
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
@@ -33,6 +34,67 @@ function replayTo(wc: Electron.WebContents): void {
   if (lastCaps) wc.send(IPC.event, lastCaps);
   if (lastStatus) wc.send(IPC.event, lastStatus);
   if (Object.keys(mergedState).length) wc.send(IPC.event, { type: 'state', data: mergedState });
+  sendShutdown(wc);
+}
+
+// --- graceful shutdown orchestration ---------------------------------------
+// Owned by main so it survives the window being closed/hidden mid-cool-down.
+let shutdownPhase: ShutdownPhase = null;
+let shutdownCoolFrom = 0;
+let shutdownStartedAt = 0;
+let shutdownWarned = false;
+
+function shutInput() {
+  return {
+    moduleIsOn: !!mergedState.moduleIsOn,
+    grillTemp: typeof mergedState.grillTemp === 'number' ? mergedState.grillTemp : null,
+    grillSetTemp: typeof mergedState.grillSetTemp === 'number' ? mergedState.grillSetTemp : null,
+    fanState: !!mergedState.fanState,
+  };
+}
+
+function sendShutdown(wc?: Electron.WebContents): void {
+  (wc ?? win?.webContents)?.send(IPC.event, {
+    type: 'shutdown', phase: shutdownPhase, coolFrom: shutdownCoolFrom, coolTarget: SHUTDOWN.coolTarget,
+  });
+}
+
+function requestShutdown(mode: ShutdownMode): void {
+  if (mode === 'cancel') {
+    if (shutdownPhase) { shutdownPhase = null; sendShutdown(); log('shutdown cancelled'); }
+    return;
+  }
+  if (mode === 'now' || shutdownPhase) {
+    shutdownPhase = null;
+    sidecar?.request({ cmd: 'off' }).catch(() => { /* surfaced in UI */ });
+    notify('Shutting down now', 'Turning the grill off.');
+    sendShutdown();
+    return;
+  }
+  // mode === 'auto'
+  const step = beginShutdown(shutInput());
+  shutdownPhase = step.phase;
+  shutdownStartedAt = Date.now();
+  shutdownWarned = false;
+  shutdownCoolFrom = typeof mergedState.grillTemp === 'number' ? mergedState.grillTemp : SHUTDOWN.coolTarget;
+  if (step.action === 'cool') sidecar?.request({ cmd: 'set_temp', value: SHUTDOWN.coolTarget }).catch(() => {});
+  if (step.action === 'off') sidecar?.request({ cmd: 'off' }).catch(() => {});
+  if (step.notice) notify(step.notice.title, step.notice.body);
+  sendShutdown();
+}
+
+// Advance the shutdown machine on each fresh grill state.
+function driveShutdown(): void {
+  if (!shutdownPhase) return;
+  const step = advanceShutdown(shutdownPhase, shutInput());
+  if (step.action === 'off') sidecar?.request({ cmd: 'off' }).catch(() => {});
+  if (step.notice) notify(step.notice.title, step.notice.body);
+  if (step.phase !== shutdownPhase) { shutdownPhase = step.phase; sendShutdown(); }
+  else if (shutdownPhase === 'cooling') sendShutdown();  // push progress
+  if (shutdownPhase && Date.now() - shutdownStartedAt > SHUTDOWN.stallMs && !shutdownWarned) {
+    shutdownWarned = true;
+    notify('Shutdown taking a while', "The cool-down hasn't finished — check the grill.");
+  }
 }
 
 /** Show the window (creating/un-hiding it), or hide it if already up front. */
@@ -128,6 +190,7 @@ function startSidecar(): void {
     if (evt.type === 'state') {
       mergedState = { ...mergedState, ...evt.data };
       recorder?.observe(evt.data);
+      driveShutdown();
       tray?.setState(evt.data);
     } else if (evt.type === 'capabilities') {
       lastCaps = evt;
@@ -169,7 +232,7 @@ app.whenReady().then(() => {
     win?.webContents.send(IPC.event, { type: 'notice', title, body, level });
   tray = new TrayManager(TRAY_ICON, {
     toggleWindow,
-    turnOff: () => { sidecar?.request({ cmd: 'off' }).catch(() => { /* surfaced in UI */ }); },
+    turnOff: () => requestShutdown('auto'),
   });
   tray.init();
   startSidecar();
@@ -189,6 +252,7 @@ app.whenReady().then(() => {
   ipcMain.handle(IPC.history, () => recorder!.history());
   ipcMain.handle(IPC.listCooks, () => recorder!.listCooks());
   ipcMain.handle(IPC.readCook, (_e, id: string) => recorder!.readCook(id));
+  ipcMain.handle(IPC.shutdown, (_e, mode: ShutdownMode) => { requestShutdown(mode); });
 
   app.on('activate', () => {
     // Dock/Tray click: recreate the window if gone, otherwise un-hide it.

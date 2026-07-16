@@ -56,7 +56,8 @@ type SidecarEvent =
   | { type: 'scan_result'; id?: number; devices: ScanDevice[] }
   | { type: 'ack'; id?: number; ok: true; result: unknown }
   | { type: 'error'; id?: number; ok: false; message: string }
-  | { type: 'notice'; title: string; body: string; level: NoticeLevel };
+  | { type: 'notice'; title: string; body: string; level: NoticeLevel }
+  | { type: 'shutdown'; phase: 'cooling' | 'finishing' | null; coolFrom: number; coolTarget: number };
 
 type NoticeLevel = 'info' | 'warn' | 'alert';
 
@@ -75,6 +76,7 @@ interface PitbossApi {
   getHistory(): Promise<Sample[]>;
   listCooks(): Promise<CookMeta[]>;
   readCook(id: string): Promise<Sample[]>;
+  shutdown(mode: 'auto' | 'now' | 'cancel'): Promise<unknown>;
   onEvent(cb: (evt: SidecarEvent) => void): () => void;
 }
 interface Window { pitboss: PitbossApi; }
@@ -195,6 +197,20 @@ async function run(label: string, p: Promise<unknown>): Promise<void> {
 let activeNotice: { text: string; level: NoticeLevel; until: number } | null = null;
 const NOTICE_MS = 12_000;
 
+// Graceful-shutdown progress relayed from main (null = not shutting down).
+let shutdown: { phase: 'cooling' | 'finishing'; coolFrom: number; coolTarget: number } | null = null;
+
+function shutdownStatus(): { text: string; level: string } {
+  if (!shutdown) return lifecycleStatus();
+  if (shutdown.phase === 'cooling') {
+    const cur = state.grillTemp ?? shutdown.coolFrom;
+    const span = Math.max(1, shutdown.coolFrom - shutdown.coolTarget);
+    const pct = Math.max(0, Math.min(100, Math.round(((shutdown.coolFrom - cur) / span) * 100)));
+    return { text: `Shutting down — cooling to ${shutdown.coolTarget}${unit()}: ${cur}${unit()} now (${pct}% cooled)`, level: 'warn' };
+  }
+  return { text: 'Shutting down — fan cooling the firepot…', level: 'warn' };
+}
+
 // The grill's current lifecycle phase, derived from live state.
 function lifecycleStatus(): { text: string; level: string } {
   if (!dataFresh()) {
@@ -222,7 +238,9 @@ function renderStatusBar(): void {
   const bar = document.getElementById('statusBar');
   if (!bar) return;
   let text: string, level: string;
-  if (activeNotice && Date.now() < activeNotice.until) {
+  if (shutdown) {
+    ({ text, level } = shutdownStatus());                 // shutdown takes priority
+  } else if (activeNotice && Date.now() < activeNotice.until) {
     text = activeNotice.text; level = activeNotice.level;
   } else {
     ({ text, level } = lifecycleStatus());
@@ -375,6 +393,8 @@ function renderSetpoint(): void {
 
 // A user edited the stepper: stop mirroring the grill until the next connect.
 function userEditSetpoint(): void {
+  // Choosing a new temp mid-shutdown means "keep cooking" — cancel the shutdown.
+  if (shutdown) { void window.pitboss.shutdown('cancel'); shutdown = null; }
   userSetTarget = true;
   renderSetpoint();
 }
@@ -759,7 +779,17 @@ function wireControls(): void {
   });
 
   $('offBtn').addEventListener('click', () => {
-    if (confirm('Turn the grill off?')) run('Turning off', window.pitboss.off());
+    // A press mid-shutdown skips the cool-down and powers off immediately.
+    if (shutdown) {
+      if (confirm('Skip the cool-down and shut off now?')) {
+        void window.pitboss.shutdown('now');
+        toast('Shutting down now');
+      }
+      return;
+    }
+    // Otherwise start a graceful shutdown — main cools to a safe temp first when
+    // the grill is hot (prevents a hopper flare-up), then powers off.
+    if (confirm('Shut down the grill?')) void window.pitboss.shutdown('auto');
   });
 
   $('lightBtn').addEventListener('click', () =>
@@ -889,6 +919,10 @@ function handleEvent(evt: SidecarEvent): void {
       break;
     case 'notice':
       activeNotice = { text: evt.title, level: evt.level, until: Date.now() + NOTICE_MS };
+      renderStatusBar();
+      break;
+    case 'shutdown':
+      shutdown = evt.phase ? { phase: evt.phase, coolFrom: evt.coolFrom, coolTarget: evt.coolTarget } : null;
       renderStatusBar();
       break;
   }
