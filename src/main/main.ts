@@ -7,6 +7,7 @@ import { SettingsStore } from './store';
 import { Recorder } from './recorder';
 import { TrayManager } from './tray';
 import { advanceShutdown, beginShutdown, SHUTDOWN, ShutdownPhase } from './shutdown';
+import { maintenanceDue, maintenanceReasons } from './maintenance';
 import { GrillCommand, GrillState, IPC, Settings, ShutdownMode, SidecarEvent } from '../shared/protocol';
 
 // Project root = two levels up from dist/main/.
@@ -35,6 +36,10 @@ function replayTo(wc: Electron.WebContents): void {
   if (lastStatus) wc.send(IPC.event, lastStatus);
   if (Object.keys(mergedState).length) wc.send(IPC.event, { type: 'state', data: mergedState });
   sendShutdown(wc);
+  if (recorder) {
+    const m = recorder.maintenance();
+    wc.send(IPC.event, { type: 'maintenance', state: m, due: maintenanceDue(m), reasons: maintenanceReasons(m) });
+  }
 }
 
 // --- graceful shutdown orchestration ---------------------------------------
@@ -230,6 +235,9 @@ app.whenReady().then(() => {
   // Relay the recorder's notifications into the renderer's status bar.
   recorder.onNotice = (title, body, level) =>
     win?.webContents.send(IPC.event, { type: 'notice', title, body, level });
+  // Relay maintenance counters so the renderer can show the cleaning reminder.
+  recorder.onMaintenance = (state, due, reasons) =>
+    win?.webContents.send(IPC.event, { type: 'maintenance', state, due, reasons });
   tray = new TrayManager(TRAY_ICON, {
     toggleWindow,
     turnOff: () => requestShutdown('auto'),
@@ -253,6 +261,7 @@ app.whenReady().then(() => {
   ipcMain.handle(IPC.listCooks, () => recorder!.listCooks());
   ipcMain.handle(IPC.readCook, (_e, id: string) => recorder!.readCook(id));
   ipcMain.handle(IPC.shutdown, (_e, mode: ShutdownMode) => { requestShutdown(mode); });
+  ipcMain.handle(IPC.cleaned, () => { recorder!.resetMaintenance(); });
 
   app.on('activate', () => {
     // Dock/Tray click: recreate the window if gone, otherwise un-hide it.

@@ -14,9 +14,10 @@
 import { app, Notification, shell } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
-import { CookMeta, GrillState, NoticeLevel, Sample } from '../shared/protocol';
+import { CookMeta, GrillState, MaintenanceState, NoticeLevel, Sample } from '../shared/protocol';
 import { SettingsStore } from './store';
 import { classifyThermal, TempPoint, THERMAL } from './thermal';
+import { freshMaintenance, isFlareup, maintenanceDue, maintenanceReasons } from './maintenance';
 import { log } from './log';
 
 const SAMPLE_INTERVAL_MS = 5_000;   // at most one recorded point per 5s
@@ -57,6 +58,14 @@ export class Recorder {
   private wasRunning = false;
   private poweredOffFired = false;
 
+  // Maintenance tracking (cooks / run-time / flare-ups since last clean).
+  private maint: MaintenanceState = freshMaintenance();
+  private lastObserveAt = 0;
+  private lastMaintSaveAt = 0;
+  private flareupFired = false;
+  private cleaningDueFired = false;
+  onMaintenance?: (state: MaintenanceState, due: boolean, reasons: string[]) => void;
+
   // Thermal-anomaly detection (see thermal.ts): a rolling temp buffer plus
   // per-condition latches so each event notifies once until it recovers.
   private tempHist: TempPoint[] = [];
@@ -79,6 +88,8 @@ export class Recorder {
     } catch (e) {
       log('cooks dir create failed:', (e as Error).message);
     }
+    this.maint = { ...freshMaintenance(), ...(this.store.get().maintenance ?? {}) };
+    this.cleaningDueFired = maintenanceDue(this.maint);
   }
 
   setDevice(name?: string): void {
@@ -98,8 +109,77 @@ export class Recorder {
     this.checkAlerts(state);
     this.checkThermal(state, now);
     this.checkPowerState(state);
+    this.checkMaintenance(state, now);
     this.logTransitions(state);
     this.prev = { ...this.prev, ...state };
+  }
+
+  // --- maintenance ---------------------------------------------------------
+
+  // Accumulate run-time, count flare-ups (possible grease fires), and nudge the
+  // user to clean once usage or flare-ups cross a threshold.
+  private checkMaintenance(state: GrillState, now: number): void {
+    // Integrate grill-on time.
+    if (this.lastObserveAt && state.moduleIsOn) {
+      this.maint.runSecondsSinceClean += Math.min(now - this.lastObserveAt, 10_000) / 1000;
+    }
+    this.lastObserveAt = now;
+
+    // Flare-up: temp spikes well above setpoint while running (possible grease
+    // fire). Edge-triggered; re-arms once temp settles back toward the setpoint.
+    const flaring = isFlareup(state.grillTemp ?? null, state.grillSetTemp ?? null, !!state.moduleIsOn);
+    if (flaring) {
+      if (!this.flareupFired) {
+        this.flareupFired = true;
+        this.maint.flareupsSinceClean += 1;
+        this.notify('Large temperature flare-up',
+          `Grill hit ${state.grillTemp}° (set ${state.grillSetTemp}°) — possible grease fire. Keep an eye on it and clean the grease tray/bucket soon.`, true);
+        this.emitMaintenance();
+      }
+    } else if (typeof state.grillTemp === 'number' && typeof state.grillSetTemp === 'number'
+               && state.grillTemp < state.grillSetTemp + 50) {
+      this.flareupFired = false;
+    }
+
+    // Recommend a clean once due (once, until reset via "Cleaned").
+    if (maintenanceDue(this.maint)) {
+      if (!this.cleaningDueFired) {
+        this.cleaningDueFired = true;
+        this.notify('Time to clean the grill',
+          `Recommended after ${maintenanceReasons(this.maint).join(' · ')} since the last clean.`);
+        this.emitMaintenance();
+      }
+    }
+
+    // Persist + relay periodically (run-time ticks constantly).
+    if (now - this.lastMaintSaveAt > 30_000) {
+      this.lastMaintSaveAt = now;
+      this.persistMaintenance();
+      this.emitMaintenance();
+    }
+  }
+
+  private emitMaintenance(): void {
+    this.onMaintenance?.(this.maint, maintenanceDue(this.maint), maintenanceReasons(this.maint));
+  }
+
+  private persistMaintenance(): void {
+    this.store.set({ maintenance: this.maint });
+  }
+
+  /** Reset the maintenance counters — the user has cleaned the grill. */
+  resetMaintenance(): void {
+    this.maint = { ...freshMaintenance(), cleanedAt: Date.now() };
+    this.flareupFired = false;
+    this.cleaningDueFired = false;
+    this.persistMaintenance();
+    this.emitMaintenance();
+    log('maintenance reset (grill cleaned)');
+  }
+
+  /** Current maintenance snapshot, for the initial renderer sync. */
+  maintenance(): MaintenanceState {
+    return this.maint;
   }
 
   // --- cook lifecycle ------------------------------------------------------
@@ -141,6 +221,10 @@ export class Recorder {
     this.stream = null;
     log(`cook ended: ${this.cookId} (${this.samples.length} samples)`);
     this.cookId = null;
+    // Count the completed cook toward the cleaning cadence.
+    this.maint.cooksSinceClean += 1;
+    this.persistMaintenance();
+    this.emitMaintenance();
   }
 
   private maybeSample(state: GrillState, now: number): void {

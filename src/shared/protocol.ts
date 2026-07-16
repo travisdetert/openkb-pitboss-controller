@@ -68,7 +68,9 @@ export type SidecarEvent =
   // surface it (lid open, probe done, pellets, …) alongside the OS notification.
   | { type: 'notice'; title: string; body: string; level: NoticeLevel }
   // main -> renderer graceful-shutdown progress (null phase = not shutting down).
-  | { type: 'shutdown'; phase: 'cooling' | 'finishing' | null; coolFrom: number; coolTarget: number };
+  | { type: 'shutdown'; phase: 'cooling' | 'finishing' | null; coolFrom: number; coolTarget: number }
+  // main -> renderer maintenance counters + whether a cleaning is recommended.
+  | { type: 'maintenance'; state: MaintenanceState; due: boolean; reasons: string[] };
 
 export type NoticeLevel = 'info' | 'warn' | 'alert';
 
@@ -94,6 +96,15 @@ export interface Settings {
   grillModel: string;
   windowBounds?: { x?: number; y?: number; width: number; height: number };
   pellets?: PelletState;
+  maintenance?: MaintenanceState;
+}
+
+// Cleaning/maintenance counters since the last "Cleaned" reset.
+export interface MaintenanceState {
+  cooksSinceClean: number;
+  runSecondsSinceClean: number;
+  flareupsSinceClean: number;
+  cleanedAt: number;
 }
 
 // Estimated pellet level, derived from cumulative auger run-time. Rough by
@@ -141,6 +152,7 @@ export const IPC = {
   listCooks: 'pitboss:cooks:list',
   readCook: 'pitboss:cooks:read',  // full sample array for one cook id
   shutdown: 'pitboss:shutdown',    // renderer -> main: 'auto' | 'now' | 'cancel'
+  cleaned: 'pitboss:cleaned',      // renderer -> main: reset maintenance counters
 } as const;
 
 export type ShutdownMode = 'auto' | 'now' | 'cancel';

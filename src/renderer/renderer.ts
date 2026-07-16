@@ -35,6 +35,7 @@ interface Settings {
   grillName: string;
   grillModel: string;
   pellets?: PelletState;
+  maintenance?: MaintenanceState;
 }
 interface Sample {
   t: number;
@@ -57,9 +58,13 @@ type SidecarEvent =
   | { type: 'ack'; id?: number; ok: true; result: unknown }
   | { type: 'error'; id?: number; ok: false; message: string }
   | { type: 'notice'; title: string; body: string; level: NoticeLevel }
-  | { type: 'shutdown'; phase: 'cooling' | 'finishing' | null; coolFrom: number; coolTarget: number };
+  | { type: 'shutdown'; phase: 'cooling' | 'finishing' | null; coolFrom: number; coolTarget: number }
+  | { type: 'maintenance'; state: MaintenanceState; due: boolean; reasons: string[] };
 
 type NoticeLevel = 'info' | 'warn' | 'alert';
+interface MaintenanceState {
+  cooksSinceClean: number; runSecondsSinceClean: number; flareupsSinceClean: number; cleanedAt: number;
+}
 
 interface PitbossApi {
   connect(name?: string, model?: string): Promise<unknown>;
@@ -77,6 +82,7 @@ interface PitbossApi {
   listCooks(): Promise<CookMeta[]>;
   readCook(id: string): Promise<Sample[]>;
   shutdown(mode: 'auto' | 'now' | 'cancel'): Promise<unknown>;
+  cleaned(): Promise<unknown>;
   onEvent(cb: (evt: SidecarEvent) => void): () => void;
 }
 interface Window { pitboss: PitbossApi; }
@@ -161,6 +167,11 @@ let augerSeen = false, fanSeen = false, igniterSeen = false;
 const pellets: PelletState = { capacityLbs: 20, feedRateLbsPerHr: 8, augerSeconds: 0, refilledAt: 0 };
 let lastAugerTickT = 0;      // for integrating auger-on time between state events
 let lastPelletSaveT = 0;     // throttle persistence of augerSeconds
+
+// Maintenance counters (owned by main, relayed here for display).
+let maint: MaintenanceState | null = null;
+let maintDue = false;
+let maintReasons: string[] = [];
 
 const unit = () => (state.isFahrenheit === false ? '°C' : '°F');
 
@@ -690,6 +701,21 @@ function renderPellets(): void {
   }
 }
 
+function renderMaintenance(): void {
+  const sub = document.getElementById('maintSub');
+  const sec = document.getElementById('maint');
+  if (!sub || !sec) return;
+  if (!maint) { sub.textContent = 'No usage recorded yet'; sec.classList.remove('due'); return; }
+  const hrs = maint.runSecondsSinceClean / 3600;
+  const use = hrs < 1 ? `${Math.round(hrs * 60)}m` : `${hrs.toFixed(1)}h`;
+  const cooks = `${maint.cooksSinceClean} cook${maint.cooksSinceClean === 1 ? '' : 's'}`;
+  const flares = `${maint.flareupsSinceClean} flare-up${maint.flareupsSinceClean === 1 ? '' : 's'}`;
+  sub.textContent = maintDue
+    ? `🧽 Cleaning recommended — ${maintReasons.join(' · ')} since last clean`
+    : `Since last clean: ${cooks} · ${use} · ${flares}`;
+  sec.classList.toggle('due', maintDue);
+}
+
 function renderState(): void {
   $('unit').textContent = unit();
   $('grillTemp').textContent =
@@ -815,6 +841,11 @@ function wireControls(): void {
     renderPellets();
     toast('Hopper emptied — good call keeping pellets dry between cooks');
   });
+
+  $('cleanedBtn').addEventListener('click', () => {
+    void window.pitboss.cleaned();
+    toast('Marked clean — maintenance counters reset');
+  });
 }
 
 // Prime is a momentary motor run: on, then off after a few seconds. Give
@@ -925,6 +956,10 @@ function handleEvent(evt: SidecarEvent): void {
       shutdown = evt.phase ? { phase: evt.phase, coolFrom: evt.coolFrom, coolTarget: evt.coolTarget } : null;
       renderStatusBar();
       break;
+    case 'maintenance':
+      maint = evt.state; maintDue = evt.due; maintReasons = evt.reasons;
+      renderMaintenance();
+      break;
   }
 }
 
@@ -946,6 +981,7 @@ async function boot(): Promise<void> {
     }
     if (s.probeLabels) Object.assign(probeLabels, s.probeLabels);
     if (s.pellets) Object.assign(pellets, s.pellets);
+    if (s.maintenance) { maint = s.maintenance; renderMaintenance(); }
     if (s.grillName) grillName = s.grillName;
     if (s.grillModel) grillModel = s.grillModel;
   } catch { /* defaults are fine */ }

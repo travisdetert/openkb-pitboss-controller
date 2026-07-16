@@ -141,6 +141,14 @@ main > * { width: 100%; max-width: 760px; }
 .pellet-fill.low  { background: var(--danger); }
 .pellet-sub { margin-top: 5px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
+/* Maintenance / cleaning cadence */
+.maint { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.maint-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; }
+.maint-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; }
+.maint-sub { font-size: 12px; color: var(--muted); }
+.maint.due .maint-sub { color: var(--warn); font-weight: 600; }
+.maint.due .maint-label { color: var(--warn); }
+
 .card {
   background: var(--bg-card);
   border: 1px solid var(--border);
