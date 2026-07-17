@@ -1036,8 +1036,38 @@ function saveSettings(): void {
   closeSettings();
   toast('Settings saved');
 }
+// Start a fresh cook: clear the pending target and every probe target + name,
+// and offer to mark the hopper full.
+function newSession(): void {
+  if (!confirm('Start a new session?\n\nThis clears the temperature target and all probe targets and names.')) return;
+  for (const k of Object.keys(probeTargets)) delete probeTargets[+k];
+  for (const k of Object.keys(probeLabels)) delete probeLabels[+k];
+  document.querySelectorAll<HTMLInputElement>('.probe-input, .probe-label').forEach((inp) => { inp.value = ''; });
+  setTempValue = 225;
+  userSetTarget = false;   // let the target re-mirror the grill's own setpoint
+
+  // One combined patch — the renderer debounces a single pending patch, so a
+  // second persist() call would drop the first.
+  const patch: Partial<Settings> = { probeTargets, probeLabels, setpoint: setTempValue };
+  let filled = false;
+  if (confirm('Did you fill the pellet hopper?\n\nMarks the pellet estimate as full for this session.')) {
+    pellets.augerSeconds = 0;
+    pellets.refilledAt = Date.now();
+    patch.pellets = pellets;
+    filled = true;
+  }
+  persist(patch);
+  showSetpoint();
+  renderState();
+  renderChart();
+  renderPellets();
+  dismissAlertBanner();
+  toast(filled ? 'New session — cleared, hopper marked full' : 'New session — target, probe targets and names cleared');
+}
+
 function wireSettings(): void {
   $('alertDismiss').addEventListener('click', dismissAlertBanner);
+  $('newSessionBtn').addEventListener('click', newSession);
   $('settingsBtn').addEventListener('click', openSettings);
   $('settingsClose').addEventListener('click', closeSettings);
   $('settingsReset').addEventListener('click', resetSettings);
