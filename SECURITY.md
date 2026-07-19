@@ -43,5 +43,33 @@ protocol layer, filesystem paths, or dependencies:
 - `semgrep --config auto` scoped to `src/` and `python/`.
 
 Fix High/Critical before pushing; note Medium/Low in the PR/commit body and record
-notable tradeoffs as an ADR. **No security pass has been run yet — one is due
-before the first push.**
+notable tradeoffs as an ADR.
+
+## Security-pass record
+
+### 2026-07-19 — first-push pass (clean, with tracked follow-ups)
+Run before the first push to GitHub (`travisdetert/openkb-pitboss-controller`, public).
+
+- **gitleaks** (`dir` + `git`): **no leaks in tracked history** (14 commits). The
+  4 `dir`-mode hits were RSA public keys inside Electron's own
+  `resources.pak`, under the gitignored `release/` build output — not tracked,
+  not secrets.
+- **npm audit** (`--omit=dev`): **0 vulnerabilities**.
+- **osv-scanner**: **18 findings, all `electron` (dev), CVSS ≤ 8.1** — Chromium/
+  Electron CVEs against the pinned `electron@33.4.11`. This app loads only local
+  bundled HTML with `contextIsolation` on, `nodeIntegration` off, and no remote
+  content, so the web-content attack surface these mostly require is not present.
+  *Follow-up (tracked):* bump Electron to a current release (38.x/39.x) and
+  re-validate on the grill before shipping a packaged build. Not done in this
+  commit — a major-version bump needs a real build + on-grill retest.
+- **semgrep** (`--config auto`, `src/` + `python/`): **3 `path-join` traversal
+  heuristics in `recorder.ts`**, all reviewed:
+  - `readCook(id)` (IPC-reachable) — **fixed:** `id` is now validated against the
+    fixed cook-id timestamp shape (`isValidCookId`) before any path is built.
+  - `startCook` — id is an internally generated `fileStem()` timestamp. Safe.
+  - `metaFor(filename)` — `filename` comes from `fs.readdirSync(this.dir)`, so it
+    is already a real entry in the dir. Safe.
+  The latter two remain flagged (the linter can't see the guards) — accepted.
+
+Result: no High/Critical left open; the Electron dependency refresh is the one
+tracked follow-up.

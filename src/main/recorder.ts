@@ -30,6 +30,14 @@ function fileStem(epochMs: number): string {
   return new Date(epochMs).toISOString().replace(/:/g, '-').replace(/\..+$/, '');
 }
 
+// A cook id is always a fileStem() timestamp. readCook(id) is reachable over IPC,
+// so validate the shape before building a path — never let an id like "../x" out
+// of the userData dir (defense in depth; the renderer only ever passes real stems).
+const COOK_ID_RE = /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}$/;
+function isValidCookId(id: string): boolean {
+  return typeof id === 'string' && COOK_ID_RE.test(id);
+}
+
 function probeTemp(state: GrillState, i: number): number | null {
   const v = (state as Record<string, unknown>)[`p${i}Temp`];
   return typeof v === 'number' ? v : null;
@@ -470,6 +478,7 @@ export class Recorder {
   }
 
   readCook(id: string): Sample[] {
+    if (!isValidCookId(id)) return [];
     const file = path.join(this.dir, `${id}.jsonl`);
     let raw: string;
     try {
