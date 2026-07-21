@@ -163,6 +163,11 @@ let grillModel = 'PB1100PSC3';
 let liveSamples: Sample[] = [];
 let viewCookId: string | null = null;
 let viewSamples: Sample[] = [];        // populated when viewing a past cook
+let cookMetas: CookMeta[] = [];        // last-known cook list, for durations
+// When the current cook began (grill power-on), or null when idle. Drives the
+// header session clock; mirrors the recorder's live cook so it survives a
+// renderer reload mid-cook (reseeded from the live cook's real start time).
+let sessionStartedAt: number | null = null;
 const MAX_LIVE_SAMPLES = 4320;          // ~6h at one point per 5s
 let lastSampleT = 0;
 // OR-latch component activity between 5s samples so brief auger pulses register.
@@ -460,6 +465,43 @@ const activeSamples = () => (viewCookId ? viewSamples : liveSamples);
 const clock = (t: number) =>
   new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
+// Elapsed time as a ticking clock: h:mm:ss once past an hour, else m:ss.
+function fmtElapsed(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
+}
+
+// Header session clock. Shows the running length of the live cook (ticking),
+// or the total length of a past cook when one is selected in the dropdown.
+function renderSessionTime(): void {
+  const el = document.getElementById('sessionTime');
+  const wrap = document.getElementById('session');
+  if (!el || !wrap) return;
+
+  // A finished past cook is selected: show its fixed total length.
+  if (viewCookId) {
+    const m = cookMetas.find((c) => c.id === viewCookId);
+    if (m && m.endedAt != null) {
+      el.textContent = fmtElapsed(m.endedAt - m.startedAt);
+      wrap.dataset.state = 'past';
+      return;
+    }
+    // else the live cook is selected by id — fall through to the live clock.
+  }
+
+  if (sessionStartedAt != null) {
+    el.textContent = fmtElapsed(Date.now() - sessionStartedAt);
+    wrap.dataset.state = 'live';
+  } else {
+    el.textContent = '—';
+    wrap.dataset.state = 'idle';
+  }
+}
+
 // Capture a live point, throttled to ~1/5s to mirror the main-process recorder.
 function pushLiveSample(): void {
   const now = Date.now();
@@ -639,6 +681,10 @@ function renderChart(): void {
 async function refreshCookList(): Promise<CookMeta[]> {
   let cooks: CookMeta[] = [];
   try { cooks = await window.pitboss.listCooks(); } catch { /* ignore */ }
+  cookMetas = cooks;
+  // The recorder owns cook lifecycle; adopt the live cook's real start time so
+  // the session clock is correct even if the renderer reloaded mid-cook.
+  if (cooks[0] && cooks[0].endedAt === null) sessionStartedAt = cooks[0].startedAt;
   const sel = $('cookSelect') as HTMLSelectElement;
   const cur = sel.value;
   sel.innerHTML = '<option value="">● Live</option>';
@@ -662,6 +708,7 @@ function wireChart(): void {
     if (!id) { viewCookId = null; viewSamples = []; }
     else { viewCookId = id; viewSamples = await window.pitboss.readCook(id); }
     renderChart();
+    renderSessionTime();
   });
   window.addEventListener('resize', renderChart);
 }
@@ -956,9 +1003,16 @@ function handleEvent(evt: SidecarEvent): void {
       lastAugerTickT = nowT;
       if (nowT - lastPelletSaveT > 15_000) { lastPelletSaveT = nowT; persist({ pellets }); }
       // A fresh power-on starts a new cook — clear the live curve so cooks
-      // don't visually run together within one app session.
-      if (state.moduleIsOn && !wasOn) { liveSamples = []; lastSampleT = 0; }
+      // don't visually run together within one app session, and start the
+      // session clock. Power-off ends the session.
+      if (state.moduleIsOn && !wasOn) {
+        liveSamples = []; lastSampleT = 0;
+        sessionStartedAt = Date.now();
+      } else if (!state.moduleIsOn && wasOn) {
+        sessionStartedAt = null;
+      }
       renderState();
+      renderSessionTime();
       pushLiveSample();
       if (!viewCookId) renderChart();
       break;
@@ -1113,10 +1167,13 @@ async function boot(): Promise<void> {
   renderSetpoint();
   renderConnection();
   await hydrateHistory();
+  renderSessionTime();
 
   // Tick so liveness/status expire on their own when data stops arriving (no
   // event would otherwise fire to flip the UI to "reconnecting / stale").
   window.setInterval(() => renderConnection(), 3000);
+  // Tick the session clock every second so elapsed time stays live.
+  window.setInterval(renderSessionTime, 1000);
 
   // Auto-connect on launch — it's a single-purpose appliance controller.
   window.pitboss.connect(grillName, grillModel).catch(() => { /* surfaced via status events */ });

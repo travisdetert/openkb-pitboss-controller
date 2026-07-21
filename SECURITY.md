@@ -55,13 +55,14 @@ Run before the first push to GitHub (`travisdetert/openkb-pitboss-controller`, p
   `resources.pak`, under the gitignored `release/` build output — not tracked,
   not secrets.
 - **npm audit** (`--omit=dev`): **0 vulnerabilities**.
-- **osv-scanner**: **18 findings, all `electron` (dev), CVSS ≤ 8.1** — Chromium/
-  Electron CVEs against the pinned `electron@33.4.11`. This app loads only local
-  bundled HTML with `contextIsolation` on, `nodeIntegration` off, and no remote
-  content, so the web-content attack surface these mostly require is not present.
-  *Follow-up (tracked):* bump Electron to a current release (38.x/39.x) and
-  re-validate on the grill before shipping a packaged build. Not done in this
-  commit — a major-version bump needs a real build + on-grill retest.
+- **osv-scanner**: initially **18 findings, all `electron` (dev), CVSS ≤ 8.1** —
+  Chromium/Electron CVEs against the then-pinned `electron@33.4.11`. This app
+  loads only local bundled HTML with `contextIsolation` on, `nodeIntegration`
+  off, and no remote content, so the web-content attack surface these mostly
+  require is not present. **Resolved 2026-07-20:** bumped Electron to **43.1.1**
+  (latest stable; Electron only security-patches the newest three majors, so 43
+  maximizes support runway). Re-scan reports **no issues**; app re-verified —
+  builds, tests pass, boots and connects on 43 with no renderer errors.
 - **semgrep** (`--config auto`, `src/` + `python/`): **3 `path-join` traversal
   heuristics in `recorder.ts`**, all reviewed:
   - `readCook(id)` (IPC-reachable) — **fixed:** `id` is now validated against the
@@ -71,5 +72,5 @@ Run before the first push to GitHub (`travisdetert/openkb-pitboss-controller`, p
     is already a real entry in the dir. Safe.
   The latter two remain flagged (the linter can't see the guards) — accepted.
 
-Result: no High/Critical left open; the Electron dependency refresh is the one
-tracked follow-up.
+Result: clean — no High/Critical open, and the one tracked follow-up (Electron
+refresh) was completed the next day (2026-07-20, Electron 43.1.1).

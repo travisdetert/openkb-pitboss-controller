@@ -7,7 +7,7 @@
 # openkb-pitboss-controller — Charter
 
 **Status:** Usable
-**Updated:** 2026-07-19
+**Updated:** 2026-07-20
 
 ## Goal
 A local, account-free desktop app to control a Pit Boss pellet grill over
@@ -43,6 +43,8 @@ Beyond the original v1 bar, the app grew a monitoring + fire-safety suite (see
   hopper burnback that motivated this project; **validated on the grill 2026-07-16**
 - [x] Maintenance cycles (cooks / run-hours / flare-ups) with cleaning reminders
 - [x] In-app status bar with the grill lifecycle + relayed notifications
+- [x] Prominent header **session clock** — ticking elapsed time of the live cook
+  (flame-lit when running), or a past cook's total length when one is selected
 
 ## Now / Next
 - **Now:** The monitoring + safety build is committed (9 commits) and passed its
@@ -50,11 +52,15 @@ Beyond the original v1 bar, the app grew a monitoring + fire-safety suite (see
   −27°/min, and the graceful shutdown ran the full cool-to-200 → off → cool-down
   chain on real fire.
 - **Next:** Published to GitHub (public) on 2026-07-19 after a clean first-push
-  security pass (SECURITY.md). One tracked follow-up from that pass: **bump Electron
-  from 33.4.11 to a current release (38.x/39.x)** and re-validate on the grill before
-  the next packaged build. Then calibrate the pellet feed-rate, and close the
-  remaining DoD gaps (packaged-app verify, Bluetooth permission UX, auto-reconnect
-  proof, README).
+  security pass (SECURITY.md). Since then: **Electron bumped 33.4.11 → 43.1.1**
+  (clears all 18 osv-scanner CVEs; re-verified — builds, tests, boots + connects
+  clean), and a **prominent header session clock** added. Then calibrate the
+  pellet feed-rate, and close the remaining DoD gaps (packaged-app verify,
+  Bluetooth permission UX, auto-reconnect proof, README).
+- **Also on the production-readiness radar** (standing-expectation gaps, not yet
+  addressed): the UI is **dark-only** (needs a light theme + toggle); there's **no
+  canonical `screenshots.config.mjs`** harness (only the ad-hoc `PITBOSS_SHOT`
+  capture); and there's **no `npm run stop`** script for the dev app.
 - **Later:** Cross-platform packaging (Windows/Linux), cook-history viewer polish,
   signed/notarized macOS build.
 
