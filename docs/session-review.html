@@ -396,7 +396,7 @@
 
 <div class="wrap">
   <div class="stats">
-    <div class="stat"><div class="n">16</div><div class="l">Commits</div></div>
+    <div class="stat"><div class="n">20</div><div class="l">Commits</div></div>
     <div class="stat"><div class="n">2</div><div class="l">Build arcs</div></div>
     <div class="stat"><div class="n">3</div><div class="l">Detection engines</div></div>
     <div class="stat"><div class="n">12</div><div class="l">Feature areas</div></div>
@@ -643,11 +643,16 @@
 <section class="block">
   <div class="wrap">
     <span class="eyebrow">The trail</span>
-    <h2>Sixteen commits, newest first.</h2>
-    <p class="intro">The first nine were the build session. The next seven are the second arc —
+    <h2>Twenty commits, newest first.</h2>
+    <p class="intro">The first nine were the build session. The rest are the second arc —
       hardening and the live feedback loop below: on-grill fixes, OS integration, a first-push
-      security pass, an Electron security bump, and the session clock.</p>
+      security pass, an Electron security bump, the session manager, and the generalization to
+      any Pit Boss grill.</p>
     <div class="commits">
+      <div class="commit"><span class="h mono">aa173d2</span><span class="m">Generalize to any Pit Boss grill with a first-run discovery wizard</span></div>
+      <div class="commit"><span class="h mono">a595181</span><span class="m">Add a live-cook screenshot; make PITBOSS_SHOT connection-aware</span></div>
+      <div class="commit"><span class="h mono">9729407</span><span class="m">docs: comprehensive test plan, prod-ready README, and the human-AI case study</span></div>
+      <div class="commit"><span class="h mono">66da3d0</span><span class="m">Add session manager and rework the connection/idle UX</span></div>
       <div class="commit"><span class="h mono">2e163b7</span><span class="m">Upgrade Electron 33→43 and add a header session clock</span></div>
       <div class="commit"><span class="h mono">92723a4</span><span class="m">Record first-push security pass; harden readCook against path traversal</span></div>
       <div class="commit"><span class="h mono">9f746db</span><span class="m">Add "New Session" — clear target, probe targets/names, offer hopper refill</span></div>
@@ -759,6 +764,14 @@
         <p>The first GitHub push ran the security pass — which caught a real path-traversal gap — and an
           Electron bump cleared 18 Chromium CVEs. A default practice, not an afterthought.</p>
         <div class="metric">18 CVEs → 0 · one gap fixed</div>
+      </div>
+      <div class="pcard">
+        <div class="pk">From “your grill” to “anyone’s”</div>
+        <h3>A first-run wizard for any Pit Boss</h3>
+        <p>Probing a live board proved the model isn’t self-reported — so the app scans, reads the
+          control board from the name, and pre-filters the model list (6, not 128). Verified on real
+          fire: scan → pick → connect.</p>
+        <div class="metric">hardcoded model → scan &amp; pick</div>
       </div>
     </div>
     <div class="proof-note">

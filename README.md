@@ -90,6 +90,8 @@ power on your grill, tap *Scan*, pick it from the list, and choose your model
 (pre-filtered to your control board). The choice is saved locally; later launches
 connect straight to your grill. Change it anytime via **Settings → Change grill**.
 
+![First-run setup wizard over a fresh, empty dashboard — scan for your grill, no account or cloud.](docs/screenshots/wizard.png)
+
 ## Diagnostics (no app needed)
 
 ```bash
