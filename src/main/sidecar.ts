@@ -114,13 +114,23 @@ export class Sidecar extends EventEmitter {
         reject(new Error(`command '${cmd.cmd}' timed out`));
       }, timeoutMs);
 
-      // scan returns via scan_result rather than ack — special-case it.
+      // scan / list_models return via their own event (scan_result / models)
+      // rather than a plain ack — special-case them.
       if (cmd.cmd === 'scan') {
         const onEvent = (evt: SidecarEvent) => {
           if (evt.type === 'scan_result' && evt.id === id) {
             clearTimeout(timer);
             this.off('event', onEvent);
             resolve(evt.devices);
+          }
+        };
+        this.on('event', onEvent);
+      } else if (cmd.cmd === 'list_models') {
+        const onEvent = (evt: SidecarEvent) => {
+          if (evt.type === 'models' && evt.id === id) {
+            clearTimeout(timer);
+            this.off('event', onEvent);
+            resolve(evt.models);
           }
         };
         this.on('event', onEvent);

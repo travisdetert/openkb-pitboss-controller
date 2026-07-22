@@ -31,7 +31,10 @@ v1 is done when all of these are true.
 - [ ] Auto-reconnect proven across real BLE drops (short antenna range)
 - [ ] Runs/builds from a fresh checkout (README documents how) — incl. icon build
 - [x] Security pass run; findings fixed or accepted (SECURITY.md — 2026-07-19)
-- [x] Notable decisions recorded (docs/adr/ — 0001 process, 0002 graceful shutdown)
+- [x] Notable decisions recorded (docs/adr/ — 0001 process, 0002 graceful
+  shutdown, 0003 grill discovery & model selection)
+- [x] Works for anyone: first-run wizard scans, finds the grill, and picks the
+  model (any Bluetooth Pit Boss grill, not just the dev's PB1100PSC3)
 
 Beyond the original v1 bar, the app grew a monitoring + fire-safety suite (see
 `docs/session-review.html` and `docs/detection-test-plan.md`):

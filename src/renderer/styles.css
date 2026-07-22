@@ -272,6 +272,23 @@ main > * { width: 100%; max-width: 760px; }
 .modal-foot .btn { flex: 0 0 auto; padding: 9px 16px; }
 .btn-save { background: var(--flame); border-color: var(--flame); color: #1a1208; }
 
+/* First-run grill wizard */
+.wiz-intro { color: var(--muted); font-size: 0.95rem; margin: 6px 0 14px; }
+.wiz-note { color: var(--faint); font-size: 0.85rem; }
+.wiz-status { color: var(--muted); font-size: 0.9rem; margin: 10px 0; min-height: 1.2em; }
+.wiz-list { display: flex; flex-direction: column; gap: 7px; margin-top: 10px; }
+.wiz-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 12px 14px; text-align: left; width: 100%;
+  background: var(--bg-card2); border: 1px solid var(--border); border-radius: 10px;
+  color: var(--text); cursor: pointer;
+}
+.wiz-item:hover { border-color: var(--flame); }
+.wiz-item .wi-name { display: block; font-weight: 600; font-size: 0.98rem; }
+.wiz-item .wi-sub { display: block; font-size: 0.8rem; color: var(--muted); margin-top: 3px; font-variant-numeric: tabular-nums; }
+.wiz-item .wi-rssi { font-size: 0.78rem; color: var(--muted); white-space: nowrap; }
+.wiz-foot { margin-top: 14px; }
+
 /* Sessions manager */
 .sessions-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0 12px; }
 .sessions-count { font-size: 12px; color: var(--muted); }

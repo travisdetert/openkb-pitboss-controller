@@ -7,8 +7,11 @@ BLE and adds the things the stock app never did: full cook recording, a graceful
 fire-preventing shutdown, tunable anomaly alerts, and an at-a-glance dashboard.
 
 **Status: production-ready**, deployed in-platform and validated on real fire.
-Built and verified against a **Pit Boss Pro Series 1100 Combo** (`PB1100PSC3`,
-PBL control board, firmware 0.5.7).
+Works with **any Bluetooth Pit Boss grill** — a first-run wizard scans, finds your
+grill, and picks the model (via `pytboss`'s 100+ supported models; see
+[ADR 0003](docs/adr/0003-grill-discovery-and-model-selection.md)). Developed and
+validated against a **Pit Boss Pro Series 1100 Combo** (`PB1100PSC3`, PBL control
+board, firmware 0.5.7).
 
 ![A live cook: grill at 74°F raising to 180°, the temperature curve and component-activity timeline drawing, pellet estimate, maintenance, and a monitored probe.](docs/screenshots/live-cook.png)
 
@@ -81,6 +84,11 @@ npm test           # unit suite (thermal / shutdown / maintenance / config)
 
 macOS will prompt for **Bluetooth permission** the first time it scans — allow it
 (System Settings → Privacy & Security → Bluetooth).
+
+**First run:** with no grill configured yet, the app opens a **setup wizard** —
+power on your grill, tap *Scan*, pick it from the list, and choose your model
+(pre-filtered to your control board). The choice is saved locally; later launches
+connect straight to your grill. Change it anytime via **Settings → Change grill**.
 
 ## Diagnostics (no app needed)
 

@@ -46,7 +46,7 @@ from typing import Any
 
 from bleak import BleakScanner
 from pytboss import PitBoss, BleConnection
-from pytboss.grills import get_grill
+from pytboss.grills import get_grill, get_grills
 
 
 # ----------------------------------------------------------------------------
@@ -254,6 +254,41 @@ class GrillController:
 
 
 # ----------------------------------------------------------------------------
+# Model registry (for the first-run picker)
+# ----------------------------------------------------------------------------
+
+def _list_models(control_board: str | None) -> list[dict]:
+    """Supported grill models, pre-filtered to a control board when given.
+
+    The command protocol is defined per control board, so a name-prefix match
+    (PBL-… -> PBL) narrows the picker to the handful of relevant models; if the
+    board is unknown or has no matches, fall back to the full list.
+    """
+    grills = []
+    if control_board:
+        try:
+            grills = list(get_grills(control_board=control_board))
+        except Exception as ex:  # noqa: BLE001
+            log("get_grills(control_board) failed:", repr(ex))
+    if not grills:
+        grills = list(get_grills())
+
+    out = []
+    for g in grills:
+        cb = getattr(g.control_board, "name", None)
+        out.append({
+            "name": g.name,
+            "control_board": cb,
+            "min_temp": g.min_temp,
+            "max_temp": g.max_temp,
+            "meat_probes": g.meat_probes,
+            "has_lights": g.has_lights,
+        })
+    out.sort(key=lambda m: m["name"])
+    return out
+
+
+# ----------------------------------------------------------------------------
 # Command dispatch
 # ----------------------------------------------------------------------------
 
@@ -270,6 +305,14 @@ async def handle(ctrl: GrillController, msg: dict[str, Any]) -> None:
         elif cmd == "scan":
             result = await ctrl.scan(float(msg.get("seconds", 8)))
             emit({"type": "scan_result", "id": mid, "devices": result})
+            return
+        elif cmd == "list_models":
+            # Supported grill models for the first-run picker. The BLE name prefix
+            # maps to a control board (PBL-… -> PBL); pre-filter to that board's
+            # models when we can, else return the full list.
+            board = msg.get("control_board")
+            models = _list_models(board)
+            emit({"type": "models", "id": mid, "control_board": board, "models": models})
             return
         elif cmd == "connect":
             await ctrl.connect(msg.get("name"), msg.get("model"))

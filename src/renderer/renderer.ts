@@ -22,6 +22,11 @@ interface Capabilities {
   temp_increments: number[]; meat_probes: number; has_lights: boolean;
 }
 interface ScanDevice { name: string; rssi: number; }
+interface ModelInfo {
+  name: string; control_board: string | null;
+  min_temp: number | null; max_temp: number | null;
+  meat_probes: number; has_lights: boolean;
+}
 interface PelletState {
   capacityLbs: number;
   feedRateLbsPerHr: number;
@@ -34,6 +39,7 @@ interface Settings {
   probeLabels?: Record<number, string>;
   grillName: string;
   grillModel: string;
+  grillConfigured?: boolean;
   pellets?: PelletState;
   maintenance?: MaintenanceState;
   detectionSensitivity?: Sensitivity;
@@ -74,6 +80,7 @@ interface PitbossApi {
   connect(name?: string, model?: string): Promise<unknown>;
   disconnect(): Promise<unknown>;
   scan(seconds?: number): Promise<ScanDevice[]>;
+  listModels(controlBoard?: string | null): Promise<ModelInfo[]>;
   setTemp(value: number): Promise<unknown>;
   setProbe(probe: number, value: number): Promise<unknown>;
   light(on: boolean): Promise<unknown>;
@@ -1385,6 +1392,104 @@ function wireSessions(): void {
   });
 }
 
+// ---- first-run grill wizard (ADR 0003) -------------------------------------
+let wizReconfig = false;
+let wizDeviceNameSel = '';
+
+// "PBL-F4CF…" -> "PBL" (the control board; used to pre-filter the model list).
+function controlBoardFromName(name: string): string {
+  const i = name.indexOf('-');
+  return (i > 0 ? name.slice(0, i) : name).toUpperCase();
+}
+
+function openWizard(reconfig = false): void {
+  wizReconfig = reconfig;
+  $('wizStep2').classList.add('hidden');
+  $('wizStep1').classList.remove('hidden');
+  $('wizDeviceList').innerHTML = '';
+  $('wizScanStatus').textContent = '';
+  $('wizardTitle').textContent = reconfig ? 'Change grill' : 'Set up your grill';
+  $('wizardClose').classList.toggle('hidden', !reconfig);   // first run can't be dismissed
+  $('wizardOverlay').classList.remove('hidden');
+}
+function closeWizard(): void { $('wizardOverlay').classList.add('hidden'); }
+
+async function wizScan(): Promise<void> {
+  const btn = $('wizScanBtn') as HTMLButtonElement;
+  const status = $('wizScanStatus');
+  btn.disabled = true;
+  status.textContent = 'Scanning for nearby grills…';
+  let devices: ScanDevice[] = [];
+  try { devices = await window.pitboss.scan(8); } catch { /* surfaced below */ }
+  btn.disabled = false;
+
+  const list = $('wizDeviceList');
+  list.innerHTML = '';
+  if (!devices.length) {
+    status.textContent = 'No grills found. Make sure it’s powered on and in range, then scan again.';
+    return;
+  }
+  status.textContent = `Found ${devices.length} grill${devices.length === 1 ? '' : 's'}:`;
+  for (const d of devices) {
+    const b = document.createElement('button');
+    b.className = 'wiz-item';
+    const board = controlBoardFromName(d.name);
+    b.innerHTML =
+      `<span><span class="wi-name">${esc(d.name)}</span>` +
+      `<span class="wi-sub">${esc(board)} control board</span></span>` +
+      `<span class="wi-rssi">${d.rssi} dBm</span>`;
+    b.addEventListener('click', () => void wizSelectDevice(d.name));
+    list.appendChild(b);
+  }
+}
+
+async function wizSelectDevice(name: string): Promise<void> {
+  wizDeviceNameSel = name;
+  const board = controlBoardFromName(name);
+  $('wizDeviceName').textContent = name;
+  $('wizBoardNote').textContent = `(${board} control board)`;
+  $('wizStep1').classList.add('hidden');
+  $('wizStep2').classList.remove('hidden');
+
+  const list = $('wizModelList');
+  list.innerHTML = '<div class="wiz-status">Loading models…</div>';
+  let models: ModelInfo[] = [];
+  try { models = await window.pitboss.listModels(board); } catch { /* */ }
+  list.innerHTML = '';
+  if (!models.length) { list.innerHTML = '<div class="wiz-status">No models found.</div>'; return; }
+  for (const m of models) {
+    const b = document.createElement('button');
+    b.className = 'wiz-item';
+    const caps = `${m.min_temp ?? '?'}–${m.max_temp ?? '?'}° · ${m.meat_probes} probe${m.meat_probes === 1 ? '' : 's'}` +
+      (m.has_lights ? ' · lights' : '');
+    b.innerHTML = `<span><span class="wi-name">${esc(m.name)}</span><span class="wi-sub">${esc(caps)}</span></span>`;
+    b.addEventListener('click', () => void wizSelectModel(m.name));
+    list.appendChild(b);
+  }
+}
+
+async function wizSelectModel(model: string): Promise<void> {
+  grillName = wizDeviceNameSel;
+  grillModel = model;
+  try { await window.pitboss.setSettings({ grillName, grillModel, grillConfigured: true }); } catch { /* */ }
+  closeWizard();
+  toast(`Grill set: ${model}`);
+  // (Re)connect to the chosen grill.
+  if (wizReconfig) { try { await window.pitboss.disconnect(); } catch { /* */ } }
+  wantConnection = true;
+  userSetTarget = false;
+  window.pitboss.connect(grillName, grillModel).catch(() => { /* status events surface it */ });
+}
+
+function wireWizard(): void {
+  $('wizScanBtn').addEventListener('click', () => void wizScan());
+  $('wizBackBtn').addEventListener('click', () => {
+    $('wizStep2').classList.add('hidden');
+    $('wizStep1').classList.remove('hidden');
+  });
+  $('wizardClose').addEventListener('click', closeWizard);
+}
+
 function wireSettings(): void {
   $('alertDismiss').addEventListener('click', dismissAlertBanner);
   $('newSessionBtn').addEventListener('click', newSession);
@@ -1392,6 +1497,7 @@ function wireSettings(): void {
   $('settingsClose').addEventListener('click', closeSettings);
   $('settingsReset').addEventListener('click', resetSettings);
   $('settingsSave').addEventListener('click', saveSettings);
+  $('cfgChangeGrill').addEventListener('click', () => { closeSettings(); openWizard(true); });
   $('settingsOverlay').addEventListener('click', (e) => {
     if (e.target === document.getElementById('settingsOverlay')) closeSettings();
   });
@@ -1410,10 +1516,13 @@ async function boot(): Promise<void> {
   wireChart();
   wireSettings();
   wireSessions();
+  wireWizard();
 
   // Restore remembered settings before first render / connect.
+  let grillConfigured = false;
   try {
     const s = await window.pitboss.getSettings();
+    grillConfigured = !!s.grillConfigured;
     if (typeof s.setpoint === 'number') setTempValue = s.setpoint;
     // Replace (not merge) so a target/label the user cleared doesn't reappear
     // from our built-in defaults.
@@ -1444,8 +1553,14 @@ async function boot(): Promise<void> {
   // Tick the session clock every second so elapsed time stays live.
   window.setInterval(renderSessionTime, 1000);
 
-  // Auto-connect on launch — it's a single-purpose appliance controller.
-  window.pitboss.connect(grillName, grillModel).catch(() => { /* surfaced via status events */ });
+  // First run (no grill chosen yet) → the discovery wizard instead of auto-
+  // connecting to a hardcoded default. Once configured, auto-connect on launch —
+  // it's a single-purpose appliance controller.
+  if (grillConfigured) {
+    window.pitboss.connect(grillName, grillModel).catch(() => { /* surfaced via status events */ });
+  } else {
+    openWizard(false);
+  }
 }
 
 void boot();

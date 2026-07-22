@@ -55,6 +55,16 @@ export interface ScanDevice {
   rssi: number;
 }
 
+// A supported grill model, for the first-run picker.
+export interface ModelInfo {
+  name: string;
+  control_board: string | null;
+  min_temp: number | null;
+  max_temp: number | null;
+  meat_probes: number;
+  has_lights: boolean;
+}
+
 // Events pushed from sidecar -> main -> renderer
 export type SidecarEvent =
   | { type: 'ready'; model_default: string; name_default: string }
@@ -62,6 +72,7 @@ export type SidecarEvent =
   | { type: 'capabilities'; model: string; min_temp: number; max_temp: number; temp_increments: number[]; meat_probes: number; has_lights: boolean }
   | { type: 'state'; data: GrillState }
   | { type: 'scan_result'; id?: number; devices: ScanDevice[] }
+  | { type: 'models'; id?: number; control_board?: string | null; models: ModelInfo[] }
   | { type: 'ack'; id?: number; ok: true; result: unknown }
   | { type: 'error'; id?: number; ok: false; message: string }
   // main -> renderer relay of a fired notification, so the in-app status bar can
@@ -79,6 +90,7 @@ export type GrillCommand =
   | { cmd: 'connect'; name?: string; model?: string }
   | { cmd: 'disconnect' }
   | { cmd: 'scan'; seconds?: number }
+  | { cmd: 'list_models'; control_board?: string | null }
   | { cmd: 'set_temp'; value: number }
   | { cmd: 'set_probe'; probe: number; value: number }
   | { cmd: 'light'; on: boolean }
@@ -95,6 +107,7 @@ export interface Settings {
   cookNames?: Record<string, string>;      // optional user name/note per cook id
   grillName: string;
   grillModel: string;
+  grillConfigured?: boolean;   // true once the user has picked their grill (gates the wizard)
   windowBounds?: { x?: number; y?: number; width: number; height: number };
   pellets?: PelletState;
   maintenance?: MaintenanceState;

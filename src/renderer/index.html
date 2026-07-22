@@ -128,6 +128,33 @@
 
   <div id="toast" class="toast hidden"></div>
 
+  <!-- First-run wizard: discover the grill and pick its model (see ADR 0003) -->
+  <div id="wizardOverlay" class="modal-overlay hidden">
+    <div class="modal wizard">
+      <div class="modal-head">
+        <span class="modal-title" id="wizardTitle">Set up your grill</span>
+        <button id="wizardClose" class="modal-x hidden" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <!-- Step 1 — find the grill -->
+        <div id="wizStep1">
+          <p class="wiz-intro">Power on your Pit Boss grill and make sure it's nearby, then scan.
+            Everything stays local — no account, no cloud.</p>
+          <button id="wizScanBtn" class="btn btn-save">Scan for grills</button>
+          <div id="wizScanStatus" class="wiz-status"></div>
+          <div id="wizDeviceList" class="wiz-list"></div>
+        </div>
+        <!-- Step 2 — pick the model -->
+        <div id="wizStep2" class="hidden">
+          <p class="wiz-intro">Found <b id="wizDeviceName"></b>. Select your grill model
+            <span class="wiz-note" id="wizBoardNote"></span>:</p>
+          <div id="wizModelList" class="wiz-list"></div>
+          <div class="wiz-foot"><button id="wizBackBtn" class="btn btn-ghost">← Back</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Sessions manager: rename / delete recorded cooks (clean up test data) -->
   <div id="sessionsOverlay" class="modal-overlay hidden">
     <div class="modal" role="dialog" aria-modal="true" aria-label="Sessions">
@@ -189,6 +216,11 @@
           <h3>System</h3>
           <label class="cfg-check"><input type="checkbox" id="cfgLogin" /><span>Start Pit Boss at login</span></label>
           <p class="cfg-hint">Keep the grill in your menu bar and dock automatically after you sign in.</p>
+        </section>
+        <section class="cfg-sec">
+          <h3>Grill</h3>
+          <button id="cfgChangeGrill" class="btn btn-ghost">Change grill…</button>
+          <p class="cfg-hint">Re-scan and pick a different grill or model.</p>
         </section>
       </div>
       <div class="modal-foot">

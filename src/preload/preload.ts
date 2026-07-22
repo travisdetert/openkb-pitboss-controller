@@ -23,6 +23,7 @@ type GrillCommand =
   | { cmd: 'connect'; name?: string; model?: string }
   | { cmd: 'disconnect' }
   | { cmd: 'scan'; seconds?: number }
+  | { cmd: 'list_models'; control_board?: string | null }
   | { cmd: 'set_temp'; value: number }
   | { cmd: 'set_probe'; probe: number; value: number }
   | { cmd: 'light'; on: boolean }
@@ -39,6 +40,7 @@ const api = {
   connect: (name?: string, model?: string) => invoke({ cmd: 'connect', name, model }),
   disconnect: () => invoke({ cmd: 'disconnect' }),
   scan: (seconds = 8) => invoke({ cmd: 'scan', seconds }),
+  listModels: (controlBoard?: string | null) => invoke({ cmd: 'list_models', control_board: controlBoard }),
   setTemp: (value: number) => invoke({ cmd: 'set_temp', value }),
   setProbe: (probe: number, value: number) => invoke({ cmd: 'set_probe', probe, value }),
   light: (on: boolean) => invoke({ cmd: 'light', on }),
