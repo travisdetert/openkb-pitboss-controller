@@ -31,8 +31,10 @@ v1 is done when all of these are true.
 - [ ] Auto-reconnect proven across real BLE drops (short antenna range)
 - [ ] Runs/builds from a fresh checkout (README documents how) — incl. icon build
 - [x] Security pass run; findings fixed or accepted (SECURITY.md — 2026-07-19)
+- [x] Data storage & backup decided: data in `userData` (not the repo), app name
+  pinned, local-only backup accepted for a grill controller (ADR 0004)
 - [x] Notable decisions recorded (docs/adr/ — 0001 process, 0002 graceful
-  shutdown, 0003 grill discovery & model selection)
+  shutdown, 0003 grill discovery & model selection, 0004 local-only storage)
 - [x] Works for anyone: first-run wizard scans, finds the grill, and picks the
   model (any Bluetooth Pit Boss grill, not just the dev's PB1100PSC3)
 
