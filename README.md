@@ -70,17 +70,18 @@ Reusing it is far more reliable than re-deriving byte offsets in Node.
 
 ## Setup
 
-```bash
-# Python side
-python3 -m venv .venv
-. .venv/bin/activate
-pip install pytboss
+**Prerequisites:** Node 20+ and Python 3.11+ (macOS: `brew install node python`).
 
-# Electron side
-npm install
-npm start          # builds, then launches Electron
-npm test           # unit suite (thermal / shutdown / maintenance / config)
+```bash
+git clone git@github.com:travisdetert/openkb-pitboss-controller.git
+cd openkb-pitboss-controller
+npm run setup      # one command: JS deps + Python venv + pinned BLE stack
+npm start          # builds, launches, and opens the first-run wizard
 ```
+
+`npm run setup` (`scripts/setup.mjs`) runs `npm install`, creates the `.venv`, and
+installs the pinned deps from `requirements.txt`. It's idempotent — re-run it
+anytime. Other scripts: `npm test` (unit suite), `npm run dev` (devtools open).
 
 macOS will prompt for **Bluetooth permission** the first time it scans — allow it
 (System Settings → Privacy & Security → Bluetooth).

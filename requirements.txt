@@ -1,0 +1,7 @@
+# Python dependencies for the BLE grill sidecar (python/sidecar.py).
+# Pinned to the versions this was built and validated against on the grill,
+# so a fresh checkout gets a known-good BLE stack.
+pytboss==2025.12.0            # BLE framing + per-control-board decoding (the core)
+bleak==3.0.2                 # cross-platform BLE transport
+bleak-retry-connector==4.6.1 # resilient reconnects
+aiohttp==3.14.1              # pulled by pytboss

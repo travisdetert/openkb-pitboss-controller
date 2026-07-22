@@ -3,7 +3,11 @@
   "version": "0.1.0",
   "description": "Local Bluetooth controller for Pit Boss grills — no cloud, no account, no marketing.",
   "main": "dist/main/main.js",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
+    "setup": "node scripts/setup.mjs",
     "build": "tsc -p tsconfig.json && npm run copy-assets",
     "copy-assets": "node scripts/copy-assets.js",
     "icon": "python scripts/make_icon.py && iconutil -c icns build/icon.iconset -o build/icon.icns",
