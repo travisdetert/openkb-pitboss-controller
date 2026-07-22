@@ -301,6 +301,8 @@ app.whenReady().then(() => {
   ipcMain.handle(IPC.history, () => recorder!.history());
   ipcMain.handle(IPC.listCooks, () => recorder!.listCooks());
   ipcMain.handle(IPC.readCook, (_e, id: string) => recorder!.readCook(id));
+  ipcMain.handle(IPC.deleteCook, (_e, id: string) => recorder!.deleteCook(id));
+  ipcMain.handle(IPC.renameCook, (_e, id: string, name: string) => recorder!.renameCook(id, name));
   ipcMain.handle(IPC.shutdown, (_e, mode: ShutdownMode) => { requestShutdown(mode); });
   ipcMain.handle(IPC.cleaned, () => { recorder!.resetMaintenance(); });
 

@@ -92,6 +92,7 @@ export interface Settings {
   setpoint: number;
   probeTargets: Record<number, number>;
   probeLabels?: Record<number, string>;   // user names per probe ("Chicken", …)
+  cookNames?: Record<string, string>;      // optional user name/note per cook id
   grillName: string;
   grillModel: string;
   windowBounds?: { x?: number; y?: number; width: number; height: number };
@@ -147,6 +148,7 @@ export interface CookMeta {
   samples: number;              // sample count
   device?: string;
   labels?: Record<number, string>;  // probe names captured at cook start
+  name?: string;                // optional user name/note (session manager)
 }
 
 // Channel names for IPC between main and renderer.
@@ -158,6 +160,8 @@ export const IPC = {
   history: 'pitboss:history',      // samples for the active (or latest) cook
   listCooks: 'pitboss:cooks:list',
   readCook: 'pitboss:cooks:read',  // full sample array for one cook id
+  deleteCook: 'pitboss:cooks:delete',  // remove a saved cook (session manager)
+  renameCook: 'pitboss:cooks:rename',  // set/clear a cook's name/note
   shutdown: 'pitboss:shutdown',    // renderer -> main: 'auto' | 'now' | 'cancel'
   cleaned: 'pitboss:cleaned',      // renderer -> main: reset maintenance counters
   getLoginItem: 'pitboss:login:get',

@@ -36,6 +36,7 @@
     <button id="primeBtn" class="btn btn-ghost">Prime</button>
     <button id="refreshBtn" class="btn btn-ghost">Refresh</button>
     <button id="newSessionBtn" class="btn btn-ghost">New Session</button>
+    <button id="sessionsBtn" class="btn btn-ghost">Sessions</button>
     <button id="settingsBtn" class="btn btn-ghost">Settings</button>
   </div>
 
@@ -61,19 +62,42 @@
           <option value="">● Live</option>
         </select>
       </div>
-      <div class="bigtemp">
-        <span id="grillTemp" class="bigtemp-value">--</span>
-        <span class="bigtemp-unit" id="unit">°F</span>
+      <!-- The grill card body has three exclusive modes, driven by updateReadoutMode():
+           · liveControls — the live temp + target stepper (only in Live view with data)
+           · cookSummary  — a header for a selected past cook (date, duration, peak…)
+           · cookStats    — recent-cook stats before first contact (waiting screen)
+           The chart + activity (chartWrap) show for both live and past-cook views. -->
+      <div id="liveControls">
+        <div class="bigtemp">
+          <span id="grillTemp" class="bigtemp-value">--</span>
+          <span class="bigtemp-unit" id="unit">°F</span>
+        </div>
+        <div class="set-line"><span id="grillSetLabel" class="set-label">— —</span></div>
+
+        <div class="target-caption">Target °F</div>
+        <div id="presets" class="presets"></div>
       </div>
-      <div class="set-line"><span id="grillSetLabel" class="set-label">— —</span></div>
 
-      <div class="target-caption">Target °F</div>
-      <div id="presets" class="presets"></div>
+      <!-- Summary header shown when a past cook is selected in the dropdown. -->
+      <div id="cookSummary" class="cook-summary hidden">
+        <div class="cook-summary-title" id="cookSummaryTitle"></div>
+        <div class="cook-summary-stats" id="cookSummaryStats"></div>
+      </div>
 
-      <canvas id="grillChart" class="panel-canvas"></canvas>
-      <div class="activity-wrap">
-        <div class="activity-title">Component activity</div>
-        <canvas id="activityChart" class="activity-canvas"></canvas>
+      <div id="chartWrap">
+        <canvas id="grillChart" class="panel-canvas"></canvas>
+        <div class="activity-wrap">
+          <div class="activity-title">Component activity</div>
+          <canvas id="activityChart" class="activity-canvas"></canvas>
+        </div>
+      </div>
+
+      <!-- Shown in place of the live readout before first contact: a summary of
+           recent cooks so the connecting screen is useful, not empty. -->
+      <div id="cookStats" class="cook-stats hidden">
+        <div class="cook-stats-title">Recent cooks</div>
+        <div class="cook-stats-grid" id="cookStatsGrid"></div>
+        <div class="cook-stats-empty hidden" id="cookStatsEmpty">No cooks recorded yet</div>
       </div>
 
       <div class="pellet-gauge">
@@ -103,6 +127,28 @@
   </main>
 
   <div id="toast" class="toast hidden"></div>
+
+  <!-- Sessions manager: rename / delete recorded cooks (clean up test data) -->
+  <div id="sessionsOverlay" class="modal-overlay hidden">
+    <div class="modal" role="dialog" aria-modal="true" aria-label="Sessions">
+      <div class="modal-head">
+        <span class="modal-title">Sessions</span>
+        <button id="sessionsClose" class="modal-x" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="sessions-bar">
+          <button id="selectTestBtn" class="btn btn-ghost">Select likely test cooks</button>
+          <span class="sessions-count" id="sessionsCount"></span>
+        </div>
+        <div class="sessions-list" id="sessionsList"></div>
+        <div class="sessions-empty hidden" id="sessionsEmpty">No cooks recorded yet</div>
+      </div>
+      <div class="modal-foot">
+        <button id="deleteSelectedBtn" class="btn btn-danger" disabled>Delete selected</button>
+        <button id="sessionsDone" class="btn btn-ghost">Done</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Settings -->
   <div id="settingsOverlay" class="modal-overlay hidden">

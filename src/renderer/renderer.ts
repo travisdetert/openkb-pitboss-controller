@@ -51,7 +51,7 @@ interface Sample {
 }
 interface CookMeta {
   id: string; startedAt: number; endedAt: number | null;
-  samples: number; device?: string;
+  samples: number; device?: string; name?: string;
 }
 type SidecarEvent =
   | { type: 'ready'; model_default: string; name_default: string }
@@ -85,6 +85,8 @@ interface PitbossApi {
   getHistory(): Promise<Sample[]>;
   listCooks(): Promise<CookMeta[]>;
   readCook(id: string): Promise<Sample[]>;
+  deleteCook(id: string): Promise<boolean>;
+  renameCook(id: string, name: string): Promise<boolean>;
   shutdown(mode: 'auto' | 'now' | 'cancel'): Promise<unknown>;
   cleaned(): Promise<unknown>;
   getLoginItem(): Promise<boolean>;
@@ -107,6 +109,10 @@ let wantConnection = true;   // user intent; the sidecar auto-retries while true
 // are stale (frozen), which we surface honestly rather than pretending live.
 let lastDataAt = 0;
 const DATA_FRESH_MS = 12_000;
+// While the grill is running, a short data gap is a radio drop worth retrying;
+// past this it's more honestly "lost" (grill likely powered off or out of range)
+// than "reconnecting", which implies it's about to come back.
+const LOST_CONTACT_MS = 90_000;
 const dataFresh = (): boolean => lastDataAt > 0 && Date.now() - lastDataAt < DATA_FRESH_MS;
 let setTempValue = 225;       // pending setpoint shown in the stepper
 // Once the user adjusts the stepper we stop mirroring the grill's own setpoint
@@ -240,14 +246,31 @@ function shutdownStatus(): { text: string; level: string } {
   return { text: 'Shutting down — fan cooling the firepot…', level: 'warn' };
 }
 
+// Why has live data stopped? The last known power state (still held in `state`
+// after a drop) tells a deliberate power-down — where the grill's BLE goes with
+// it, so there's nothing to reconnect to — from a transient radio glitch.
+type StaleReason = 'powered-down' | 'lost' | 'retrying';
+function staleReason(): StaleReason {
+  if (!state.moduleIsOn) return 'powered-down';
+  if (Date.now() - lastDataAt > LOST_CONTACT_MS) return 'lost';
+  return 'retrying';
+}
+
 // The grill's current lifecycle phase, derived from live state.
 function lifecycleStatus(): { text: string; level: string } {
   if (!dataFresh()) {
     if (lastDataAt > 0) {
-      const secs = Math.round((Date.now() - lastDataAt) / 1000);
-      return { text: `Reconnecting… last reading ${secs}s ago (values may be stale)`, level: 'warn' };
+      const ago = humanAgo(Date.now() - lastDataAt);
+      switch (staleReason()) {
+        case 'powered-down':
+          return { text: `Grill off — powered down (last reading ${ago} ago)`, level: 'off' };
+        case 'lost':
+          return { text: `Lost contact ${ago} ago — grill may be off or out of range`, level: 'warn' };
+        default:
+          return { text: `Reconnecting… last reading ${ago} ago (values may be stale)`, level: 'warn' };
+      }
     }
-    return { text: wantConnection ? 'Connecting…' : 'Disconnected', level: 'off' };
+    return { text: wantConnection ? 'Waiting for grill…' : 'Disconnected', level: 'off' };
   }
   const t = state.grillTemp, set = state.grillSetTemp;
   if (state.moduleIsOn) {
@@ -304,12 +327,19 @@ function renderConnection(): void {
   // controls should follow. A retry is only shown when data has actually gone
   // stale (so a spurious status drop mid-stream doesn't blank the UI).
   const live = dataFresh();
-  const retrying = wantConnection && !live;
-  const st = live ? 'connected' : retrying ? 'connecting' : 'disconnected';
+  const hadData = lastDataAt > 0;
+  // A grill that powered down took its BLE with it — show that, not an anxious
+  // "reconnecting" spinner that can never succeed until it's turned back on.
+  const poweredDown = !live && hadData && !state.moduleIsOn;
+  const connecting = wantConnection && !live && !poweredDown;
+  const st = live ? 'connected' : poweredDown ? 'off' : connecting ? 'connecting' : 'disconnected';
   btn.dataset.state = st;
   label.textContent =
     live ? (state.__device || 'Connected') :
-    retrying ? 'Reconnecting…' :
+    poweredDown ? 'Grill off' :
+    // "Reconnecting" only once we've actually had a connection; before first
+    // contact it's just "Waiting…" — matching the status bar so they never disagree.
+    connecting ? (hadData ? 'Reconnecting…' : 'Waiting…') :
     'Connect';
 
   const main = $('app');
@@ -328,6 +358,7 @@ function renderConnection(): void {
   document.querySelectorAll<HTMLButtonElement>('.chip, .probe-target button, .probe-target input')
     .forEach((el) => (el.disabled = !enable));
 
+  updateReadoutMode();
   renderStatusBar();
 }
 
@@ -464,6 +495,19 @@ const activeSamples = () => (viewCookId ? viewSamples : liveSamples);
 
 const clock = (t: number) =>
   new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+// A short, human "how long ago" — "45s", "12m", "20h 36m", "2d 3h". Keeps the
+// status line readable instead of dumping raw seconds ("74168s").
+function humanAgo(ms: number): string {
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) { const mm = m % 60; return mm ? `${h}h ${mm}m` : `${h}h`; }
+  const d = Math.floor(h / 24), hh = h % 24;
+  return hh ? `${d}d ${hh}h` : `${d}d`;
+}
 
 // Elapsed time as a ticking clock: h:mm:ss once past an hour, else m:ss.
 function fmtElapsed(ms: number): string {
@@ -707,6 +751,7 @@ function wireChart(): void {
     const id = sel.value;
     if (!id) { viewCookId = null; viewSamples = []; }
     else { viewCookId = id; viewSamples = await window.pitboss.readCook(id); }
+    updateReadoutMode();   // a selected past cook needs the chart (readout) visible
     renderChart();
     renderSessionTime();
   });
@@ -744,6 +789,84 @@ function fmtDuration(h: number): string {
     return mm ? `${hh}h ${mm}m` : `${hh}h`;
   }
   return `${Math.max(1, Math.round(h * 60))}m`;
+}
+
+// Summary of recent cooks, shown on the connecting/waiting screen in place of
+// the empty live readout. Built from the cook metadata we already hydrate.
+function renderCookStats(): void {
+  const grid = document.getElementById('cookStatsGrid');
+  const empty = document.getElementById('cookStatsEmpty');
+  if (!grid || !empty) return;
+
+  const done = cookMetas.filter((c) => c.endedAt != null);
+  if (done.length === 0) {
+    grid.innerHTML = '';
+    empty.classList.remove('hidden');
+    return;
+  }
+  empty.classList.add('hidden');
+
+  const durs = done.map((c) => (c.endedAt as number) - c.startedAt).filter((d) => d > 0);
+  const avg = durs.length ? durs.reduce((a, b) => a + b, 0) / durs.length : 0;
+  const longest = durs.length ? Math.max(...durs) : 0;
+  const last = done[0];   // metas arrive newest-first
+
+  const tiles = [
+    { value: String(done.length), label: done.length === 1 ? 'cook recorded' : 'cooks recorded' },
+    { value: humanAgo(Date.now() - last.startedAt) + ' ago', label: 'last cook' },
+    { value: durs.length ? humanAgo(avg) : '—', label: 'avg length' },
+    { value: longest ? humanAgo(longest) : '—', label: 'longest' },
+  ];
+  grid.innerHTML = tiles.map((t) =>
+    `<div class="cook-stat"><div class="cook-stat-value">${esc(t.value)}</div>` +
+    `<div class="cook-stat-label">${esc(t.label)}</div></div>`
+  ).join('');
+}
+
+// Header + stats for a selected past cook, from its metadata and loaded samples.
+function renderCookSummary(): void {
+  const titleEl = document.getElementById('cookSummaryTitle');
+  const statsEl = document.getElementById('cookSummaryStats');
+  if (!titleEl || !statsEl) return;
+  const m = cookMetas.find((c) => c.id === viewCookId);
+  if (!m) { titleEl.textContent = ''; statsEl.textContent = ''; return; }
+
+  const d = new Date(m.startedAt);
+  const date = d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+  titleEl.textContent = `${date} · ${clock(m.startedAt)}` + (m.endedAt == null ? ' · live' : '');
+
+  const dur = (m.endedAt ?? Date.now()) - m.startedAt;
+  const temps = viewSamples.map((s) => s.grillTemp).filter((t): t is number => t != null);
+  const peak = temps.length ? Math.max(...temps) : null;
+  const avg = temps.length ? Math.round(temps.reduce((a, b) => a + b, 0) / temps.length) : null;
+  const parts = [`Duration ${fmtElapsed(dur)}`];
+  if (peak != null) parts.push(`Peak ${peak}${unit()}`);
+  if (avg != null) parts.push(`Avg ${avg}${unit()}`);
+  parts.push(`${m.samples} readings`);
+  statsEl.textContent = parts.join('  ·  ');
+}
+
+// The grill card body has three exclusive modes. Live controls (temp + target)
+// only make sense in the live view with data; a selected past cook gets a
+// historical summary instead; before first contact we show recent-cook stats.
+// The chart shows for both live and past-cook views. Pellets + maintenance stay
+// visible throughout — they're last-known, not live-only.
+function updateReadoutMode(): void {
+  const controls = document.getElementById('liveControls');
+  const summary = document.getElementById('cookSummary');
+  const chart = document.getElementById('chartWrap');
+  const stats = document.getElementById('cookStats');
+  if (!controls || !summary || !chart || !stats) return;
+
+  const viewingPast = viewCookId != null;
+  const haveLive = lastDataAt > 0;
+  controls.classList.toggle('hidden', viewingPast || !haveLive);
+  summary.classList.toggle('hidden', !viewingPast);
+  chart.classList.toggle('hidden', !viewingPast && !haveLive);
+  stats.classList.toggle('hidden', viewingPast || haveLive);
+
+  if (viewingPast) renderCookSummary();
+  else if (!haveLive) renderCookStats();
 }
 
 function renderPellets(): void {
@@ -1119,6 +1242,149 @@ function newSession(): void {
   toast(filled ? 'New session — cleared, hopper marked full' : 'New session — target, probe targets and names cleared');
 }
 
+// ---- sessions manager ------------------------------------------------------
+let sessionsCooks: CookMeta[] = [];
+const sessionsSelected = new Set<string>();
+
+// A likely test cook: a completed one that's very short or barely sampled.
+// Never auto-flags an unfinished/running cook.
+function isLikelyTest(c: CookMeta): boolean {
+  if (c.endedAt == null) return false;
+  return (c.endedAt - c.startedAt) < 5 * 60_000 || c.samples < 10;
+}
+
+function updateSessionsFooter(): void {
+  const btn = $('deleteSelectedBtn') as HTMLButtonElement;
+  const n = sessionsSelected.size;
+  btn.disabled = n === 0;
+  btn.textContent = n ? `Delete selected (${n})` : 'Delete selected';
+  const total = sessionsCooks.length;
+  $('sessionsCount').textContent = total
+    ? `${total} cook${total === 1 ? '' : 's'}` + (n ? ` · ${n} selected` : '')
+    : '';
+}
+
+async function renderSessionsList(): Promise<void> {
+  try { sessionsCooks = await window.pitboss.listCooks(); } catch { sessionsCooks = []; }
+  // Forget selections for cooks that no longer exist.
+  for (const id of [...sessionsSelected]) {
+    if (!sessionsCooks.some((c) => c.id === id)) sessionsSelected.delete(id);
+  }
+  const list = $('sessionsList');
+  $('sessionsEmpty').classList.toggle('hidden', sessionsCooks.length > 0);
+  list.innerHTML = '';
+
+  for (const c of sessionsCooks) {
+    const row = document.createElement('div');
+    row.className = 'session-row' + (sessionsSelected.has(c.id) ? ' sel' : '');
+
+    const check = document.createElement('input');
+    check.type = 'checkbox';
+    check.className = 'session-check';
+    check.checked = sessionsSelected.has(c.id);
+    check.addEventListener('change', () => {
+      if (check.checked) sessionsSelected.add(c.id); else sessionsSelected.delete(c.id);
+      row.classList.toggle('sel', check.checked);
+      updateSessionsFooter();
+    });
+
+    const info = document.createElement('div');
+    info.className = 'session-info';
+    const when = document.createElement('div');
+    when.className = 'session-when';
+    const d = new Date(c.startedAt);
+    when.textContent = d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' · ' + clock(c.startedAt);
+    if (c.endedAt == null) {
+      const live = document.createElement('span');
+      live.className = 'session-live';
+      live.textContent = 'recording';
+      when.appendChild(live);
+    }
+    const meta = document.createElement('div');
+    meta.className = 'session-meta';
+    const dur = (c.endedAt ?? Date.now()) - c.startedAt;
+    meta.textContent = `${fmtElapsed(dur)} · ${c.samples} readings` + (c.device ? ` · ${c.device}` : '');
+    info.append(when, meta);
+
+    const nameInput = document.createElement('input');
+    nameInput.className = 'session-name-input';
+    nameInput.placeholder = 'name / note';
+    nameInput.maxLength = 60;
+    nameInput.value = c.name ?? '';
+    const saveName = () => {
+      const v = nameInput.value.trim();
+      if (v === (c.name ?? '')) return;
+      c.name = v;
+      void window.pitboss.renameCook(c.id, v).then(() => refreshCookList());
+    };
+    nameInput.addEventListener('change', saveName);
+    nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') nameInput.blur(); });
+
+    const del = document.createElement('button');
+    del.className = 'session-del';
+    del.title = 'Delete this cook';
+    del.textContent = '🗑';
+    del.addEventListener('click', () => { void deleteCooks([c.id], c); });
+
+    row.append(check, info, nameInput, del);
+    list.appendChild(row);
+  }
+  updateSessionsFooter();
+}
+
+async function deleteCooks(ids: string[], single?: CookMeta): Promise<void> {
+  if (!ids.length) return;
+  const msg = ids.length === 1
+    ? `Delete this cook${single?.name ? ` “${single.name}”` : ''}? This can’t be undone.`
+    : `Delete ${ids.length} cooks? This can’t be undone.`;
+  if (!confirm(msg)) return;
+
+  let failed = 0;
+  for (const id of ids) {
+    const ok = await window.pitboss.deleteCook(id);
+    if (ok) {
+      sessionsSelected.delete(id);
+      if (viewCookId === id) { viewCookId = null; viewSamples = []; }
+    } else failed++;
+  }
+  await renderSessionsList();
+  await refreshCookList();     // keep the dropdown + stats in sync
+  updateReadoutMode();
+  renderChart();
+  renderSessionTime();
+  if (failed) toast(`${failed} couldn’t be deleted (the active cook can’t be removed)`, true);
+  else toast(ids.length === 1 ? 'Cook deleted' : `${ids.length} cooks deleted`);
+}
+
+function selectLikelyTest(): void {
+  sessionsSelected.clear();
+  for (const c of sessionsCooks) if (isLikelyTest(c)) sessionsSelected.add(c.id);
+  void renderSessionsList();
+  if (sessionsSelected.size === 0) toast('No obvious test cooks found');
+}
+
+async function openSessions(): Promise<void> {
+  sessionsSelected.clear();
+  await renderSessionsList();
+  $('sessionsOverlay').classList.remove('hidden');
+}
+function closeSessions(): void { $('sessionsOverlay').classList.add('hidden'); }
+const sessionsOpen = () => !$('sessionsOverlay').classList.contains('hidden');
+
+function wireSessions(): void {
+  $('sessionsBtn').addEventListener('click', () => void openSessions());
+  $('sessionsClose').addEventListener('click', closeSessions);
+  $('sessionsDone').addEventListener('click', closeSessions);
+  $('selectTestBtn').addEventListener('click', selectLikelyTest);
+  $('deleteSelectedBtn').addEventListener('click', () => void deleteCooks([...sessionsSelected]));
+  $('sessionsOverlay').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('sessionsOverlay')) closeSessions();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && sessionsOpen()) closeSessions();
+  });
+}
+
 function wireSettings(): void {
   $('alertDismiss').addEventListener('click', dismissAlertBanner);
   $('newSessionBtn').addEventListener('click', newSession);
@@ -1143,6 +1409,7 @@ async function boot(): Promise<void> {
   wireControls();
   wireChart();
   wireSettings();
+  wireSessions();
 
   // Restore remembered settings before first render / connect.
   try {
@@ -1168,6 +1435,8 @@ async function boot(): Promise<void> {
   renderConnection();
   await hydrateHistory();
   renderSessionTime();
+  renderPellets();        // show last-known pellet level immediately (not "~-- %")
+  updateReadoutMode();    // show recent-cook stats while we wait for first contact
 
   // Tick so liveness/status expire on their own when data stops arriving (no
   // event would otherwise fire to flip the UI to "reconnecting / stale").

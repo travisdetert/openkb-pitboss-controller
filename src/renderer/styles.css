@@ -70,6 +70,8 @@ body { display: flex; flex-direction: column; }
 .conn-pill[data-state="connected"] .dot { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
 .conn-pill[data-state="connecting"] .dot { background: var(--warn); animation: pulse 1s infinite; }
 .conn-pill[data-state="disconnected"] .dot { background: var(--danger); }
+/* Powered down is an expected resting state, not an error — a calm muted dot. */
+.conn-pill[data-state="off"] .dot { background: var(--muted); }
 @keyframes pulse { 50% { opacity: 0.3; } }
 
 /* Session timer — how long the current cook has been running. Kept prominent
@@ -102,6 +104,54 @@ body { display: flex; flex-direction: column; }
 .session[data-state="live"] .session-time { color: var(--flame); }
 .session[data-state="past"] .session-time { color: var(--text); }
 .session[data-state="past"] .session-label::after { content: " · cook"; }
+
+/* Summary header for a selected past cook (replaces the live temp/target). */
+.cook-summary { padding: 10px 2px 6px; text-align: center; }
+.cook-summary-title { font-size: 18px; font-weight: 700; color: var(--text); }
+.cook-summary-stats {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Recent-cooks summary shown on the connecting/waiting screen. */
+.cook-stats { padding: 8px 2px 4px; }
+.cook-stats-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+.cook-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+.cook-stat {
+  background: var(--bg-card2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.cook-stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.cook-stat-label {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+.cook-stats-empty {
+  color: var(--muted);
+  text-align: center;
+  padding: 24px 0;
+}
 
 .topbar { flex: none; }
 main {
@@ -221,6 +271,36 @@ main > * { width: 100%; max-width: 760px; }
 .modal-foot { display: flex; justify-content: space-between; gap: 10px; padding: 14px 18px; border-top: 1px solid var(--border); }
 .modal-foot .btn { flex: 0 0 auto; padding: 9px 16px; }
 .btn-save { background: var(--flame); border-color: var(--flame); color: #1a1208; }
+
+/* Sessions manager */
+.sessions-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0 12px; }
+.sessions-count { font-size: 12px; color: var(--muted); }
+.sessions-list { display: flex; flex-direction: column; gap: 6px; }
+.session-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px;
+  background: var(--bg-card2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.session-row.sel { border-color: var(--flame); }
+.session-check { width: 16px; height: 16px; flex: none; accent-color: var(--flame); cursor: pointer; }
+.session-info { flex: 1 1 auto; min-width: 0; }
+.session-when { font-size: 13px; font-weight: 600; color: var(--text); }
+.session-when .session-live { color: var(--flame); font-weight: 700; margin-left: 6px; font-size: 11px; }
+.session-meta { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; margin-top: 2px; }
+.session-name-input {
+  flex: 0 1 150px; min-width: 90px;
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text); padding: 6px 8px; font-size: 12px;
+}
+.session-name-input:focus { outline: none; border-color: var(--flame); }
+.session-del {
+  flex: none; background: transparent; border: 1px solid var(--border);
+  border-radius: 8px; color: var(--muted); cursor: pointer; padding: 6px 9px; font-size: 13px;
+}
+.session-del:hover { color: var(--danger); border-color: var(--danger); }
+.sessions-empty { color: var(--muted); text-align: center; padding: 28px 0; }
 
 .card {
   background: var(--bg-card);

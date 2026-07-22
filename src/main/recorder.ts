@@ -521,7 +521,39 @@ export class Recorder {
       } catch { /* skip */ }
     }
     if (!startedAt) return null;
-    return { id, startedAt, endedAt, samples, device, labels };
+    const name = this.store.get().cookNames?.[id];
+    return { id, startedAt, endedAt, samples, device, labels, name };
+  }
+
+  // --- session management (delete / rename) --------------------------------
+
+  /** Delete a saved cook and drop any name for it. Never the active recording. */
+  deleteCook(id: string): boolean {
+    if (!isValidCookId(id)) return false;
+    if (id === this.cookId) { log(`refused to delete the active cook: ${id}`); return false; }
+    const file = path.join(this.dir, `${id}.jsonl`);
+    try {
+      fs.unlinkSync(file);
+    } catch (e) {
+      log('deleteCook failed:', (e as Error).message);
+      return false;
+    }
+    const names = { ...(this.store.get().cookNames ?? {}) };
+    if (names[id] !== undefined) { delete names[id]; this.store.set({ cookNames: names }); }
+    log(`cook deleted: ${id}`);
+    return true;
+  }
+
+  /** Set (or clear, when blank) a user name/note for a cook. */
+  renameCook(id: string, name: string): boolean {
+    if (!isValidCookId(id)) return false;
+    if (!fs.existsSync(path.join(this.dir, `${id}.jsonl`))) return false;
+    const clean = String(name ?? '').trim().slice(0, 60);
+    const names = { ...(this.store.get().cookNames ?? {}) };
+    if (clean) names[id] = clean; else delete names[id];
+    this.store.set({ cookNames: names });
+    log(`cook renamed: ${id} -> ${clean || '(cleared)'}`);
+    return true;
   }
 
   dispose(): void {
