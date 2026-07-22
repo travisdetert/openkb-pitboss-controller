@@ -1,5 +1,5 @@
 {
-  "name": "openkb-pitboss-controller",
+  "name": "openkb-pit-boss",
   "version": "0.1.0",
   "description": "Local Bluetooth controller for Pit Boss grills — no cloud, no account, no marketing.",
   "main": "dist/main/main.js",
@@ -20,8 +20,8 @@
   "author": "",
   "license": "MIT",
   "build": {
-    "appId": "com.openkb.pitboss-controller",
-    "productName": "openkb-pitboss-controller",
+    "appId": "com.openkb.pit-boss",
+    "productName": "openkb-pit-boss",
     "directories": { "output": "release", "buildResources": "build" },
     "files": ["dist/**/*", "package.json"],
     "extraResources": [

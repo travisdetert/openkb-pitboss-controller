@@ -1,4 +1,4 @@
-# openkb-pitboss-controller
+# openkb-pit-boss
 
 A local **Bluetooth** controller for Pit Boss pellet grills — the controls you
 actually paid for, with none of the cloud. No Dansons account, no telemetry, no
@@ -61,7 +61,7 @@ and the build story: **[`docs/session-review.html`](docs/session-review.html)**.
   decoding. Speaks line-delimited JSON on stdin/stdout.
 - **Electron main** (`src/main/`) spawns the sidecar, bridges IPC, owns the cook
   recorder + safety engines, and writes a unified, tailable log to
-  `/tmp/openkb-pitboss.log`.
+  `/tmp/openkb-pit-boss.log`.
 - **Renderer** (`src/renderer/`) is the control UI.
 
 Why a Python sidecar instead of pure JS? `pytboss` already implements the BLE

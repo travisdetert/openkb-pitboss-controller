@@ -4,7 +4,7 @@
   Keep it short. Update Status / Now / Next as work lands.
   Status values: Idea · Building · Usable · Done · Parked
 -->
-# openkb-pitboss-controller — Charter
+# openkb-pit-boss — Charter
 
 **Status:** Usable
 **Updated:** 2026-07-20
@@ -25,7 +25,7 @@ v1 is done when all of these are true.
 - [x] Connects to the grill over BLE by stable advertised name and reads live state
 - [x] Core controls work end-to-end: set temp, set probe target, lights, prime, off
 - [x] Cook recorder + native notifications (probe target, pellets, errors)
-- [x] Unified, tailable main+renderer log (`/tmp/openkb-pitboss.log`)
+- [x] Unified, tailable main+renderer log (`/tmp/openkb-pit-boss.log`)
 - [ ] Packaged macOS app runs from a clean machine (bundled venv/sidecar verified)
 - [ ] Bluetooth permission UX is graceful: clear prompt + guidance when denied
 - [ ] Auto-reconnect proven across real BLE drops (short antenna range)

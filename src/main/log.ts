@@ -2,14 +2,14 @@
 // and forward renderer console messages into the same stream. So debugging
 // never requires opening DevTools or copy/pasting errors.
 //
-//   tail -f /tmp/openkb-pitboss.log
+//   tail -f /tmp/openkb-pit-boss.log
 //
 // Follows the standard openkb Electron logging convention.
 
 import * as fs from 'fs';
 import { WebContents } from 'electron';
 
-export const LOG_PATH = '/tmp/openkb-pitboss.log';
+export const LOG_PATH = '/tmp/openkb-pit-boss.log';
 
 let stream: fs.WriteStream | null = null;
 
