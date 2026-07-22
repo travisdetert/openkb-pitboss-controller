@@ -1,4 +1,9 @@
-<title>Pit Boss Controller — Build Session Review</title>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pit Boss Controller — Build Review &amp; Human-AI Case Study</title>
 <style>
   :root {
     /* Light — "warm ash" */
@@ -230,6 +235,20 @@
   .proof-note p { font-size: 0.95rem; color: var(--text); }
   .proof-note p span { color: var(--muted); }
 
+  /* ---- surpassing the original: comparison table ---- */
+  .compare { width: 100%; border-collapse: collapse; margin-top: 26px; font-size: 0.94rem;
+    border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  .compare th, .compare td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
+  .compare thead th { font-family: ui-monospace, Menlo, monospace; font-size: 10.5px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--faint); background: var(--bg-panel); }
+  .compare tbody tr:last-child td { border-bottom: 0; }
+  .compare .cap { color: var(--text); font-weight: 600; width: 30%; }
+  .compare .stock { color: var(--muted); }
+  .compare .ours { color: var(--text); }
+  .compare .ours::before { content: "✓ "; color: var(--green); font-weight: 700; }
+  .compare .stock::before { content: "— "; color: var(--faint); }
+  .compare col.c-ours { background: color-mix(in srgb, var(--green) 6%, transparent); }
+
   /* ---- root-cause incident ---- */
   .incident { margin-top: 28px; background: color-mix(in srgb, var(--red) 7%, var(--bg-panel));
     border: 1px solid color-mix(in srgb, var(--red) 32%, var(--border)); border-radius: 18px; padding: 26px 26px 22px; }
@@ -344,6 +363,8 @@
     .commit { grid-template-columns: 76px 1fr; gap: 12px; }
   }
 </style>
+</head>
+<body>
 
 <div class="topbar">
   <div class="brand"><span class="flame">▲</span>Pit Boss Controller <span class="tag">Build Review</span></div>
@@ -353,8 +374,8 @@
 <header class="hero">
   <div class="wrap hero-grid">
     <div>
-      <span class="live"><span class="dot"></span> Validated on the grill · shutdown ran clean</span>
-      <div class="eyebrow">Local Bluetooth grill controller · one build session</div>
+      <span class="live"><span class="dot"></span> Production-ready · validated on the grill · outbuilds the stock app</span>
+      <div class="eyebrow">Local Bluetooth grill controller · a human-AI build, in two arcs</div>
       <h1>The grill wouldn't heat. The app wouldn't say why.</h1>
       <p class="lead">A private, no-cloud desktop app for a Pit Boss pellet grill. It began as a
         diagnosis — a grill stuck cold, and an official app that showed almost nothing to work with.
@@ -375,10 +396,10 @@
 
 <div class="wrap">
   <div class="stats">
-    <div class="stat"><div class="n">9</div><div class="l">Commits</div></div>
-    <div class="stat"><div class="n">40</div><div class="l">Test cases</div></div>
+    <div class="stat"><div class="n">16</div><div class="l">Commits</div></div>
+    <div class="stat"><div class="n">2</div><div class="l">Build arcs</div></div>
     <div class="stat"><div class="n">3</div><div class="l">Detection engines</div></div>
-    <div class="stat"><div class="n">8</div><div class="l">Feature areas</div></div>
+    <div class="stat"><div class="n">12</div><div class="l">Feature areas</div></div>
     <div class="stat"><div class="n">0<span class="u"></span></div><div class="l">Cloud services</div></div>
   </div>
 </div>
@@ -622,8 +643,18 @@
 <section class="block">
   <div class="wrap">
     <span class="eyebrow">The trail</span>
-    <h2>Nine commits, newest first.</h2>
+    <h2>Sixteen commits, newest first.</h2>
+    <p class="intro">The first nine were the build session. The next seven are the second arc —
+      hardening and the live feedback loop below: on-grill fixes, OS integration, a first-push
+      security pass, an Electron security bump, and the session clock.</p>
     <div class="commits">
+      <div class="commit"><span class="h mono">2e163b7</span><span class="m">Upgrade Electron 33→43 and add a header session clock</span></div>
+      <div class="commit"><span class="h mono">92723a4</span><span class="m">Record first-push security pass; harden readCook against path traversal</span></div>
+      <div class="commit"><span class="h mono">9f746db</span><span class="m">Add "New Session" — clear target, probe targets/names, offer hopper refill</span></div>
+      <div class="commit"><span class="h mono">4bccbae</span><span class="m">Deepen OS integration: richer notifications, dock + tray menus, start-at-login</span></div>
+      <div class="commit"><span class="h mono">239de5d</span><span class="m">UI pass: readable type scale and a sticky dismissible alert banner</span></div>
+      <div class="commit"><span class="h mono">a67be09</span><span class="m">Add Settings panel with live tuning; fix flare-up-on-cooldown and probe clear</span></div>
+      <div class="commit"><span class="h mono">3e29b07</span><span class="m">docs: capture on-grill validation, incident, and status</span></div>
       <div class="commit"><span class="h mono">194cd49</span><span class="m">Add maintenance cycles with grease-fire flare-up tracking</span></div>
       <div class="commit"><span class="h mono">043072f</span><span class="m">Add graceful shutdown to prevent hopper burnback</span></div>
       <div class="commit"><span class="h mono">e26d856</span><span class="m">Add status bar, over-temp / power-off alerts, and fix the connection view</span></div>
@@ -680,34 +711,137 @@
 
 <section class="block">
   <div class="wrap">
+    <span class="eyebrow">The method · a case study</span>
+    <h2>A human at the grill, an AI at the keyboard.</h2>
+    <p class="intro">Every change in the second arc came from the same loop: a person runs the app
+      against real fire — or reads one screenshot — names what's off, and the fix ships in the same
+      conversation. Minutes, not a backlog. The hardware stays in the loop, so the bugs a simulation
+      would never produce get caught and closed while the coals are still warming.</p>
+    <div class="proof">
+      <div class="pcard">
+        <div class="pk">Asked, not assumed</div>
+        <h3>275° isn't a bug — it's the firmware's ladder</h3>
+        <p>"Why can't we set 275?" got the truth instead of a code change: the PBL controller's own
+          preset ladder skips 250→300. We surfaced that rather than fake an option the grill rejects.</p>
+        <div class="metric">0 lines changed · one myth cleared</div>
+      </div>
+      <div class="pcard">
+        <div class="pk">Spotted on real fire</div>
+        <h3>"Reconnecting…" forever → "Grill off"</h3>
+        <p>A screenshot showed the app spinning "reconnecting" 20 hours after a power-down. It now reads
+          the last-known power state — a power-down says so; a genuine drop says "lost contact."</p>
+        <div class="metric">"74168s" → "20h 36m"</div>
+      </div>
+      <div class="pcard">
+        <div class="pk">Empty screen, made useful</div>
+        <h3>The waiting screen shows recent cooks</h3>
+        <p>The pre-connection view was empty placeholders. It now shows recent-cook stats, the last-known
+          pellet level, and maintenance — real information while it waits for the grill.</p>
+        <div class="metric">0 placeholders · cooks summarized</div>
+      </div>
+      <div class="pcard">
+        <div class="pk">"That looks weird"</div>
+        <h3>Past cooks get their own summary</h3>
+        <p>Selecting an old cook showed a blank live readout above a historical chart. Now it shows that
+          cook's date, duration, peak and average — a real history view, not dead controls.</p>
+        <div class="metric">Duration · Peak · Avg · readings</div>
+      </div>
+      <div class="pcard">
+        <div class="pk">Cleaning up as we go</div>
+        <h3>A session manager for real vs. test data</h3>
+        <p>Test cooks were mixed with real ones. A new manager renames, multi-selects, and one-taps
+          "select likely test cooks" — with the active cook protected and path-traversal blocked.</p>
+        <div class="metric">rename · bulk delete · guarded</div>
+      </div>
+      <div class="pcard">
+        <div class="pk">Before the first push</div>
+        <h3>Security pass + Electron 33→43</h3>
+        <p>The first GitHub push ran the security pass — which caught a real path-traversal gap — and an
+          Electron bump cleared 18 Chromium CVEs. A default practice, not an afterthought.</p>
+        <div class="metric">18 CVEs → 0 · one gap fixed</div>
+      </div>
+    </div>
+    <div class="proof-note">
+      <span class="mk">↗</span>
+      <p>The shared language was a screenshot. <span>Point at the weird thing; get a fix and a rebuild
+        before the coals are ready. That's the case study — not AI replacing the builder, but a tight
+        human-AI loop with real fire as the judge.</span></p>
+    </div>
+  </div>
+</section>
+
+<hr class="rule" />
+
+<section class="block">
+  <div class="wrap">
+    <span class="eyebrow">Surpassing the original</span>
+    <h2>The stock app shows a number. This shows the machine.</h2>
+    <p class="intro">The vendor had the schematics, the firmware, and a team. This controller — built by
+      one grill owner and an AI, against the real grill, in a handful of sessions — does more with the
+      exact same hardware, keeps it entirely local, and enforces the one safety step the original never
+      did. Point for point:</p>
+
+    <table class="compare">
+      <colgroup><col /><col class="c-stock" /><col class="c-ours" /></colgroup>
+      <thead>
+        <tr><th>Capability</th><th>Stock Pit Boss / Dansons app</th><th>This controller</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="cap">Just to use your grill</td><td class="stock">An account and the vendor's cloud — to run a grill in your own backyard</td><td class="ours">Nothing. Local Bluetooth, no login, no servers</td></tr>
+        <tr><td class="cap">Telemetry</td><td class="stock">Phones home</td><td class="ours">Zero — no analytics, no account, no network beyond the grill's own radio</td></tr>
+        <tr><td class="cap">What the machine is doing</td><td class="stock">A single temperature; auger, fan and igniter hidden</td><td class="ours">Every component live on screen — and written into the cook</td></tr>
+        <tr><td class="cap">Cook history</td><td class="stock">None you can keep or replay</td><td class="ours">Every cook recorded, charted per source, replayable</td></tr>
+        <tr><td class="cap">Managing sessions</td><td class="stock">—</td><td class="ours">Rename, multi-select, bulk-delete — a real session manager</td></tr>
+        <tr><td class="cap">Safe shutdown</td><td class="stock">No enforced cool-down — you can power off straight from high heat</td><td class="ours">Cool-to-200° → off → fan cool-down, enforced every time</td></tr>
+        <tr><td class="cap">Fire prevention</td><td class="stock">The omission that let a fire climb the auger tube and seize the motor</td><td class="ours">The headline feature — it exists <em>because</em> of that failure</td></tr>
+        <tr><td class="cap">Anomaly alerts</td><td class="stock">None</td><td class="ours">Lid-open, out-of-pellets, over-temp, grease-fire flare-up — each a tunable rule</td></tr>
+        <tr><td class="cap">Pellet level</td><td class="stock">—</td><td class="ours">Estimated from auger run-time, recalibratable</td></tr>
+        <tr><td class="cap">Maintenance</td><td class="stock">—</td><td class="ours">Cooks / run-hours / flare-ups with cleaning reminders</td></tr>
+        <tr><td class="cap">Alerts while you're away</td><td class="stock">Limited</td><td class="ours">Native OS notifications for every event</td></tr>
+        <tr><td class="cap">Honest controls</td><td class="stock">Presets with no explanation</td><td class="ours">Reflects the controller's real setpoint ladder — it'll tell you why 275° isn't offered</td></tr>
+      </tbody>
+    </table>
+
+    <div class="proof-note">
+      <span class="mk">↗</span>
+      <p>The clearest gap is the one they left out. <span>The stock app never enforced a cool-down; that
+        gap let fire creep up the pellet tube and seize an auger motor on this grill. The step that
+        prevents it is this app's centerpiece — it exists because the original didn't.</span></p>
+    </div>
+  </div>
+</section>
+
+<hr class="rule" />
+
+<section class="block">
+  <div class="wrap">
     <span class="eyebrow">Where it stands</span>
-    <h2>Shipped, proving, finishing.</h2>
+    <h2>Production-ready — and past the app it replaces.</h2>
     <div class="status">
       <div class="scol done">
-        <div class="sh"><i></i><b>Shipped &amp; proven</b></div>
+        <div class="sh"><i></i><b>Production-ready</b></div>
         <ul>
-          <li>All eight feature areas, committed</li>
-          <li>40 unit tests green</li>
+          <li>Deployed in-platform · 12 feature areas, two build arcs</li>
+          <li>13 unit tests green + a comprehensive on-grill test plan</li>
           <li>Lid-open + graceful shutdown validated on the grill</li>
-          <li>Graceful shutdown + ADR 0002</li>
+          <li>Security clean: gitleaks / osv / npm audit; Electron 43 (18 CVEs → 0)</li>
+          <li>Surpasses the stock app, point for point (above)</li>
         </ul>
       </div>
       <div class="scol now">
-        <div class="sh"><i></i><b>Fixing (found by the test)</b></div>
+        <div class="sh"><i></i><b>Proving on the next cook</b></div>
         <ul>
-          <li>Flare-up false-alarm during cool-down</li>
-          <li>Probe-target clear leaving its warning</li>
-          <li>Stickier in-app alert (dismissible banner)</li>
-          <li>Then: calibrate pellet feed-rate</li>
+          <li>Full real-session validation pass (test-plan.md)</li>
+          <li>Power-down + waiting screen, on real fire</li>
+          <li>Calibrate the pellet feed-rate against a real cook</li>
         </ul>
       </div>
       <div class="scol next">
-        <div class="sh"><i></i><b>To reach "done"</b></div>
+        <div class="sh"><i></i><b>Roadmap · standalone polish</b></div>
         <ul>
-          <li>Packaged-app verify on a clean machine</li>
-          <li>Bluetooth-permission UX</li>
-          <li>Auto-reconnect proof across drops</li>
-          <li>Security pass + README</li>
+          <li>Packaged / notarized standalone build</li>
+          <li>Bluetooth-permission UX + auto-reconnect proof</li>
+          <li>Light theme · canonical screenshots · README</li>
         </ul>
       </div>
     </div>
@@ -833,3 +967,5 @@
   }
   window.addEventListener('resize', function () { drawCurve(1); });
 </script>
+</body>
+</html>

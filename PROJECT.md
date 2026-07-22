@@ -66,3 +66,5 @@ Beyond the original v1 bar, the app grew a monitoring + fire-safety suite (see
 
 ## Links
 Decisions: `docs/adr/` · Security: `SECURITY.md` · Usage: `README.md`
+Test plans: `docs/test-plan.md` (comprehensive on-grill) · `docs/detection-test-plan.md` (alerts)
+Presentation: `docs/session-review.html` (build review + human-AI case study)

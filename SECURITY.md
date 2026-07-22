@@ -74,3 +74,25 @@ Run before the first push to GitHub (`travisdetert/openkb-pitboss-controller`, p
 
 Result: clean — no High/Critical open, and the one tracked follow-up (Electron
 refresh) was completed the next day (2026-07-20, Electron 43.1.1).
+
+### 2026-07-21 — session manager (delete/rename) pass
+The session manager adds two IPC-reachable, filesystem-mutating operations, so it
+gets its own pass.
+
+- **New surface:** `Recorder.deleteCook(id)` (`fs.unlinkSync`) and
+  `renameCook(id, name)`, both reachable from the renderer via IPC. Both **validate
+  `id` with `isValidCookId` before building any path**, so a traversal id
+  (`../../etc/passwd`) is rejected before touching disk — verified against a
+  throwaway temp dir (traversal → rejected; the active/recording cook → refused;
+  rename of a missing file → refused). Cook names are stored in the settings map
+  (`cookNames`), trimmed and length-capped (60), not written into file paths.
+- **semgrep**: now **5 `path-join` heuristics in `recorder.ts`** — the 3 above plus
+  the two new `deleteCook` / `renameCook` paths. All reviewed and safe: internally
+  generated (`fileStem`), `readdir`-sourced, or `isValidCookId`-guarded. Flagged
+  because the linter can't see the guard; **accepted**.
+- **gitleaks** (`git` + `docs/`): no leaks; the new `docs/screenshots/dashboard.png`
+  contains no tokens or secrets. **npm audit / osv-scanner:** unchanged since
+  Electron 43 — still clean.
+
+Result: clean — no High/Critical open. The delete path is guarded and the
+destructive operation confirmed refusing traversal ids and the active cook.
