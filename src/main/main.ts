@@ -119,13 +119,14 @@ function toggleWindow(): void {
 function createWindow(): void {
   const bounds = store?.get().windowBounds;
   win = new BrowserWindow({
-    width: bounds?.width ?? 600,
-    height: bounds?.height ?? 860,
+    width: bounds?.width ?? 980,
+    height: bounds?.height ?? 900,
     x: bounds?.x,
     y: bounds?.y,
     minWidth: 560,
     minHeight: 640,
-    maxWidth: 820,
+    // No maxWidth — let the window grow to fit the content; the renderer keeps a
+    // comfortable content column so it doesn't over-stretch on a wide monitor.
     title: 'Pit Boss',
     icon: ICON_PATH,           // window/taskbar icon (Windows/Linux)
     backgroundColor: '#16110d',

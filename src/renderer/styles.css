@@ -11,6 +11,9 @@
   --warn: #ffcf4d;
   --danger: #e8533f;
   --blue: #5aa9e6;
+  /* Content column width — generous enough that panels breathe and labels don't
+     truncate, capped only so it doesn't over-stretch on a very wide monitor. */
+  --content-max: 1120px;
 }
 
 * { box-sizing: border-box; }
@@ -61,7 +64,9 @@ body { display: flex; flex-direction: column; }
   transition: background 0.15s;
 }
 .conn-pill:hover { background: var(--bg-card2); }
-.conn-pill { flex: none; max-width: 160px; }
+.conn-pill { flex: none; max-width: 280px; }
+/* Ellipsis is a last-resort boundary for an unusually long name, not the common
+   case — the pill is wide enough to show a full "PBL-…" grill name. */
 #connLabel { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .conn-pill .dot {
   width: 8px; height: 8px; border-radius: 50%;
@@ -164,8 +169,9 @@ main {
   gap: 12px;
   overflow-y: auto;
 }
-/* Centered content column; the window's max-width keeps it from over-stretching. */
-main > * { width: 100%; max-width: 760px; }
+/* Centered content column — wide enough for the panels to breathe, capped only so
+   it doesn't over-stretch on a very wide monitor (not a hard app-width limit). */
+main > * { width: 100%; max-width: var(--content-max); }
 
 /* Global action toolbar under the header */
 .toolbar {
@@ -175,7 +181,7 @@ main > * { width: 100%; max-width: 760px; }
   padding: 8px 14px;
   border-bottom: 1px solid var(--border);
   width: 100%;
-  max-width: 788px;
+  max-width: var(--content-max);
   margin: 0 auto;
 }
 .toolbar .btn { padding: 8px 10px; }
