@@ -146,19 +146,40 @@ function createWindow(): void {
   });
 
   // Dev affordance: PITBOSS_SHOT=<path> dumps a PNG of the rendered UI once
-  // loaded (no Screen Recording permission needed — it's our own page).
+  // loaded (no Screen Recording permission needed — it's our own page). Env knobs:
+  //   PITBOSS_SHOT_WAIT=live  — wait for live grill data before capturing (so the
+  //                             shot shows a real running cook, not the wait screen)
+  //   PITBOSS_SHOT_SETTLE=ms  — after data arrives, let the chart fill in (default 4s)
+  //   PITBOSS_SHOT_MAXWAIT=ms — give up waiting for data and capture anyway (default 60s)
+  //   PITBOSS_SHOT_DELAY=ms   — fixed delay when not waiting for live (default 1.5s)
   const shot = process.env.PITBOSS_SHOT;
   if (shot) {
+    const capture = async () => {
+      try {
+        const img = await win!.webContents.capturePage();
+        fs.writeFileSync(shot, img.toPNG());
+        log(`captured UI screenshot -> ${shot}`);
+      } catch (e) {
+        log('screenshot failed:', (e as Error).message);
+      }
+    };
     win.webContents.once('did-finish-load', () => {
-      setTimeout(async () => {
-        try {
-          const img = await win!.webContents.capturePage();
-          fs.writeFileSync(shot, img.toPNG());
-          log(`captured UI screenshot -> ${shot}`);
-        } catch (e) {
-          log('screenshot failed:', (e as Error).message);
-        }
-      }, 1500);
+      if (process.env.PITBOSS_SHOT_WAIT === 'live') {
+        const settle = Number(process.env.PITBOSS_SHOT_SETTLE) || 4000;
+        const maxWait = Number(process.env.PITBOSS_SHOT_MAXWAIT) || 60_000;
+        const started = Date.now();
+        const tick = setInterval(() => {
+          const live = typeof mergedState.grillTemp === 'number';
+          const timedOut = Date.now() - started > maxWait;
+          if (live || timedOut) {
+            clearInterval(tick);
+            log(live ? `shot: live data present, settling ${settle}ms…` : 'shot: max wait reached, capturing anyway');
+            setTimeout(capture, live ? settle : 0);
+          }
+        }, 1000);
+      } else {
+        setTimeout(capture, Number(process.env.PITBOSS_SHOT_DELAY) || 1500);
+      }
     });
   }
 

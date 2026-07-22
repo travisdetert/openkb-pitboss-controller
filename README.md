@@ -10,11 +10,11 @@ fire-preventing shutdown, tunable anomaly alerts, and an at-a-glance dashboard.
 Built and verified against a **Pit Boss Pro Series 1100 Combo** (`PB1100PSC3`,
 PBL control board, firmware 0.5.7).
 
-![The controller's at-a-glance dashboard — session clock, recent-cook stats, pellet estimate, and maintenance, shown even before the grill connects.](docs/screenshots/dashboard.png)
+![A live cook: grill at 74°F raising to 180°, the temperature curve and component-activity timeline drawing, pellet estimate, maintenance, and a monitored probe.](docs/screenshots/live-cook.png)
 
-*The ambient dashboard between cooks: recent-cook stats, a last-known pellet
-estimate, and maintenance status — no empty placeholders while it waits for the
-grill.*
+*A live cook, warming up: grill temp and setpoint, the auger/fan/igniter timeline,
+per-probe monitoring, pellet estimate, and maintenance — everything the stock app
+hides, on one screen. (Between cooks it shows a [recent-cook dashboard](docs/screenshots/dashboard.png) instead of empty placeholders.)*
 
 ## What it does
 
