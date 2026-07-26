@@ -206,14 +206,13 @@ function createWindow(): void {
 }
 
 function startSidecar(): void {
-  // In a packaged build the Python venv + sidecar are bundled as extra
-  // resources (see package.json build.extraResources); point the sidecar at
-  // them. Unpackaged dev runs use the project's .venv via PROJECT_ROOT.
+  // In a packaged build the sidecar ships as a self-contained frozen binary
+  // (PyInstaller — no Python runtime to relocate; see ADR 0005), bundled as an
+  // extra resource. Unpackaged dev runs use the project's .venv via PROJECT_ROOT.
   let root = PROJECT_ROOT;
   if (app.isPackaged) {
     const res = process.resourcesPath;
-    process.env.PITBOSS_PYTHON ||= path.join(res, 'pyenv', 'bin', 'python');
-    process.env.PITBOSS_SIDECAR ||= path.join(res, 'python', 'sidecar.py');
+    process.env.PITBOSS_SIDECAR_BIN ||= path.join(res, 'sidecar');
     root = res;
   }
   sidecar = new Sidecar(root);

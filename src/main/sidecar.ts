@@ -27,8 +27,13 @@ export class Sidecar extends EventEmitter {
     this.projectRoot = projectRoot;
   }
 
-  /** Resolve the venv python + sidecar script paths, with overrides via env. */
-  private resolvePaths(): { python: string; script: string } {
+  /** How to launch the sidecar: a self-contained frozen binary in packaged builds
+   *  (PITBOSS_SIDECAR_BIN — no Python needed), else the project's venv python
+   *  running the sidecar script in dev. */
+  private resolveSpawn(): { cmd: string; args: string[] } {
+    const bin = process.env.PITBOSS_SIDECAR_BIN;
+    if (bin) return { cmd: bin, args: [] };
+
     const venvPython = process.platform === 'win32'
       ? path.join(this.projectRoot, '.venv', 'Scripts', 'python.exe')
       : path.join(this.projectRoot, '.venv', 'bin', 'python');
@@ -36,14 +41,14 @@ export class Sidecar extends EventEmitter {
       || (fs.existsSync(venvPython) ? venvPython : 'python3');
     const script = process.env.PITBOSS_SIDECAR
       || path.join(this.projectRoot, 'python', 'sidecar.py');
-    return { python, script };
+    return { cmd: python, args: ['-u', script] };
   }
 
   start(): void {
-    const { python, script } = this.resolvePaths();
-    log(`spawning sidecar: ${python} ${script}`);
+    const { cmd, args } = this.resolveSpawn();
+    log(`spawning sidecar: ${cmd} ${args.join(' ')}`);
 
-    this.proc = spawn(python, ['-u', script], {
+    this.proc = spawn(cmd, args, {
       cwd: this.projectRoot,
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env, PYTHONUNBUFFERED: '1' },

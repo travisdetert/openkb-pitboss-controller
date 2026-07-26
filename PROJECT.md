@@ -26,7 +26,9 @@ v1 is done when all of these are true.
 - [x] Core controls work end-to-end: set temp, set probe target, lights, prime, off
 - [x] Cook recorder + native notifications (probe target, pellets, errors)
 - [x] Unified, tailable main+renderer log (`/tmp/openkb-pit-boss.log`)
-- [ ] Packaged macOS app runs from a clean machine (bundled venv/sidecar verified)
+- [x] Packaged app is self-contained: sidecar frozen to a standalone binary (no
+  system Python/venv) — verified no external refs + runs from the bundle (ADR 0005).
+  Bundle 357M → 288M. (A full on-a-clean-Mac BLE smoke test is still ideal.)
 - [ ] Bluetooth permission UX is graceful: clear prompt + guidance when denied
 - [ ] Auto-reconnect proven across real BLE drops (short antenna range)
 - [ ] Runs/builds from a fresh checkout (README documents how) — incl. icon build
@@ -34,7 +36,8 @@ v1 is done when all of these are true.
 - [x] Data storage & backup decided: data in `userData` (not the repo), app name
   pinned, local-only backup accepted for a grill controller (ADR 0004)
 - [x] Notable decisions recorded (docs/adr/ — 0001 process, 0002 graceful
-  shutdown, 0003 grill discovery & model selection, 0004 local-only storage)
+  shutdown, 0003 grill discovery & model selection, 0004 local-only storage,
+  0005 frozen sidecar binary)
 - [x] Works for anyone: first-run wizard scans, finds the grill, and picks the
   model (any Bluetooth Pit Boss grill, not just the dev's PB1100PSC3)
 

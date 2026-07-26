@@ -15,7 +15,8 @@
     "dev": "npm run build && electron . --dev",
     "watch": "tsc -p tsconfig.json -w",
     "test": "npm run build && node scripts/test-thermal.mjs && node scripts/test-shutdown.mjs && node scripts/test-maintenance.mjs && node scripts/test-config.mjs",
-    "pack": "npm run build && electron-builder --dir"
+    "build:sidecar": "node scripts/build-sidecar.mjs",
+    "pack": "npm run build && npm run build:sidecar && electron-builder --dir"
   },
   "author": "",
   "license": "MIT",
@@ -25,8 +26,7 @@
     "directories": { "output": "release", "buildResources": "build" },
     "files": ["dist/**/*", "package.json"],
     "extraResources": [
-      { "from": ".venv", "to": "pyenv" },
-      { "from": "python", "to": "python" }
+      { "from": "dist-sidecar/sidecar", "to": "sidecar" }
     ],
     "mac": {
       "target": "dir",
