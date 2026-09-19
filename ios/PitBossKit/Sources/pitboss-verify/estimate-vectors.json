@@ -1,0 +1,180 @@
+{
+  "version": 1,
+  "note": "Golden vectors for the cook-time estimator. Both implementations run these: ios/PitBossKit CookEstimate (Swift) and src/shared/estimate.ts (TypeScript). A change made to one and not the other fails here rather than diverging quietly. See ADR 0007.",
+  "sampleSpec": {
+    "epochSeconds": 1750000000,
+    "strideMinutes": 5,
+    "rounding": "half away from zero",
+    "formula": "probe[p] = from + round(perHour * minute / 60), for minute = 0, 5, ... <= minutes; grillTemp = grillSetTemp = 250",
+    "why": "Samples are generated from a spec rather than listed so both harnesses build byte-identical input. The rounding rule is stated because Swift's .rounded() and JavaScript's Math.round() disagree on negative halves (-2.5 -> -3 vs -2), which a falling-probe case would otherwise hit."
+  },
+  "cases": [
+    {
+      "name": "no target, no estimate",
+      "climb": null,
+      "probe": 1,
+      "target": null,
+      "nowMinutes": 0,
+      "expect": { "kind": "noTarget" }
+    },
+    {
+      "name": "no history, no estimate",
+      "climb": null,
+      "probe": 1,
+      "target": 203,
+      "nowMinutes": 0,
+      "expect": { "kind": "tooEarly" }
+    },
+    {
+      "name": "ten minutes is too little history",
+      "climb": { "from": 150, "perHour": 10, "minutes": 10 },
+      "probe": 1,
+      "target": 203,
+      "nowMinutes": 10,
+      "expect": { "kind": "tooEarly" }
+    },
+    {
+      "name": "a steady pre-stall climb",
+      "climb": { "from": 120, "perHour": 10, "minutes": 60 },
+      "probe": 1,
+      "target": 203,
+      "nowMinutes": 60,
+      "expect": {
+        "kind": "eta",
+        "phase": "beforeStall",
+        "ratePerHour": { "approx": 10, "tolerance": 1.5 },
+        "allowances": ["stall"],
+        "minHours": 7.0,
+        "labelPrefix": "~",
+        "finishTimeAhead": true
+      }
+    },
+    {
+      "name": "the stall",
+      "climb": { "from": 160, "perHour": 0, "minutes": 60 },
+      "probe": 1,
+      "target": 203,
+      "nowMinutes": 60,
+      "expect": {
+        "kind": "stalled",
+        "sinceMinutesAtLeast": 50,
+        "noLabel": true,
+        "explanationContains": "stalled"
+      }
+    },
+    {
+      "name": "a flat low-target cook claims no stall",
+      "climb": { "from": 160, "perHour": 0, "minutes": 60 },
+      "probe": 1,
+      "target": 165,
+      "nowMinutes": 60,
+      "expect": { "kind": "stalled", "sinceSeconds": 0 }
+    },
+    {
+      "name": "past the band and climbing",
+      "climb": { "from": 180, "perHour": 8, "minutes": 60 },
+      "probe": 1,
+      "target": 203,
+      "nowMinutes": 60,
+      "expect": { "kind": "eta", "phase": "afterStall", "allowances": [] }
+    },
+    {
+      "name": "a non-stalling target gets a plain extrapolation",
+      "climb": { "from": 120, "perHour": 20, "minutes": 60 },
+      "probe": 1,
+      "target": 165,
+      "nowMinutes": 60,
+      "expect": { "kind": "eta", "phase": "noStall", "allowances": [] }
+    },
+    {
+      "name": "a falling probe yields no estimate",
+      "climb": { "from": 180, "perHour": -10, "minutes": 60 },
+      "probe": 1,
+      "target": 203,
+      "nowMinutes": 60,
+      "expect": { "kind": "stalled" }
+    },
+    {
+      "name": "one degree an hour is below the floor",
+      "climb": { "from": 160, "perHour": 1, "minutes": 60 },
+      "probe": 1,
+      "target": 203,
+      "nowMinutes": 60,
+      "expect": { "kind": "stalled" }
+    },
+    {
+      "name": "past the target reports arrival",
+      "climb": { "from": 205, "perHour": 2, "minutes": 60 },
+      "probe": 1,
+      "target": 203,
+      "nowMinutes": 60,
+      "expect": { "kind": "alreadyThere" }
+    },
+    {
+      "name": "one pellet outage adds about an hour",
+      "climb": { "from": 180, "perHour": 8, "minutes": 60 },
+      "probe": 1,
+      "target": 203,
+      "nowMinutes": 60,
+      "events": [{ "atMinutes": 30, "kind": "out-of-pellets" }],
+      "expect": {
+        "kind": "eta",
+        "allowances": ["pelletOutage"],
+        "secondsDeltaVs": { "case": "past the band and climbing", "delta": 3600, "tolerance": 1 },
+        "explanationContains": "pellet outage"
+      }
+    },
+    {
+      "name": "two outages cost two hours",
+      "climb": { "from": 180, "perHour": 8, "minutes": 60 },
+      "probe": 1,
+      "target": 203,
+      "nowMinutes": 60,
+      "events": [
+        { "atMinutes": 20, "kind": "out-of-pellets" },
+        { "atMinutes": 40, "kind": "out-of-pellets" }
+      ],
+      "expect": {
+        "kind": "eta",
+        "secondsDeltaVs": { "case": "past the band and climbing", "delta": 7200, "tolerance": 1 }
+      }
+    },
+    {
+      "name": "an old outage adds nothing",
+      "climb": { "from": 180, "perHour": 8, "minutes": 60 },
+      "probe": 1,
+      "target": 203,
+      "nowMinutes": 60,
+      "events": [{ "atMinutes": -300, "kind": "out-of-pellets" }],
+      "expect": {
+        "kind": "eta",
+        "allowances": [],
+        "secondsDeltaVs": { "case": "past the band and climbing", "delta": 0, "tolerance": 1 }
+      }
+    },
+    {
+      "name": "a dropped link costs no cook time",
+      "climb": { "from": 180, "perHour": 8, "minutes": 60 },
+      "probe": 1,
+      "target": 203,
+      "nowMinutes": 60,
+      "events": [
+        { "atMinutes": 30, "kind": "link-lost" },
+        { "atMinutes": 31, "kind": "app-resumed" }
+      ],
+      "expect": {
+        "kind": "eta",
+        "allowances": [],
+        "secondsDeltaVs": { "case": "past the band and climbing", "delta": 0, "tolerance": 1 }
+      }
+    },
+    {
+      "name": "an unplugged probe has no estimate of its own",
+      "climb": { "from": 120, "perHour": 10, "minutes": 60 },
+      "probe": 3,
+      "target": 203,
+      "nowMinutes": 60,
+      "expect": { "kind": "tooEarly" }
+    }
+  ]
+}

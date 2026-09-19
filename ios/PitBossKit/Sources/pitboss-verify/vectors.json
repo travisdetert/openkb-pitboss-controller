@@ -1,0 +1,408 @@
+{
+  "commands": {
+    "get-status": {
+      "args": [],
+      "hex": "FE0B01FF"
+    },
+    "get-temperatures": {
+      "args": [],
+      "hex": "FE0C01FF"
+    },
+    "set-celsius": {
+      "args": [],
+      "hex": "FE0902FF"
+    },
+    "set-fahrenheit": {
+      "args": [],
+      "hex": "FE0901FF"
+    },
+    "set-probe-1-temperature(145)": {
+      "args": [
+        145
+      ],
+      "hex": "FE0502010405FF"
+    },
+    "set-probe-1-temperature(203)": {
+      "args": [
+        203
+      ],
+      "hex": "FE0502020003FF"
+    },
+    "set-temperature(180)": {
+      "args": [
+        180
+      ],
+      "hex": "FE0501010800FF"
+    },
+    "set-temperature(225)": {
+      "args": [
+        225
+      ],
+      "hex": "FE0501020205FF"
+    },
+    "set-temperature(500)": {
+      "args": [
+        500
+      ],
+      "hex": "FE0501050000FF"
+    },
+    "turn-light-off": {
+      "args": [],
+      "hex": "FE0202FF"
+    },
+    "turn-light-on": {
+      "args": [],
+      "hex": "FE0201FF"
+    },
+    "turn-off": {
+      "args": [],
+      "hex": "FE0102FF"
+    },
+    "turn-primer-motor-off": {
+      "args": [],
+      "hex": "FE0800FF"
+    },
+    "turn-primer-motor-on": {
+      "args": [],
+      "hex": "FE0801FF"
+    }
+  },
+  "decodeVectors": [
+    {
+      "decodedHex": "",
+      "encodedHex": "27f930b1a0a0b29e4285af1ed2641fbe4a",
+      "plaintextHex": ""
+    },
+    {
+      "decodedHex": "61",
+      "encodedHex": "c5c29695af024af94cf0dacd4c12bfc83b5b",
+      "plaintextHex": "61"
+    },
+    {
+      "decodedHex": "68756e74657232",
+      "encodedHex": "bedf6a3bd9b53e3b3c1495444091775f0c7ec662f36fc4ea",
+      "plaintextHex": "68756e74657232"
+    },
+    {
+      "decodedHex": "30313233343536373839616263646566",
+      "encodedHex": "0b67618edb4ae566aab6721397eefd483811e5093515b320c9383c40035d9ccd34",
+      "plaintextHex": "30313233343536373839616263646566"
+    }
+  ],
+  "lengthFraming": [
+    {
+      "bytes": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "n": 0
+    },
+    {
+      "bytes": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "n": 1
+    },
+    {
+      "bytes": [
+        0,
+        0,
+        0,
+        20
+      ],
+      "n": 20
+    },
+    {
+      "bytes": [
+        0,
+        0,
+        0,
+        21
+      ],
+      "n": 21
+    },
+    {
+      "bytes": [
+        0,
+        0,
+        0,
+        255
+      ],
+      "n": 255
+    },
+    {
+      "bytes": [
+        0,
+        0,
+        1,
+        0
+      ],
+      "n": 256
+    },
+    {
+      "bytes": [
+        0,
+        0,
+        255,
+        255
+      ],
+      "n": 65535
+    },
+    {
+      "bytes": [
+        0,
+        1,
+        0,
+        0
+      ],
+      "n": 65536
+    },
+    {
+      "bytes": [
+        0,
+        15,
+        66,
+        64
+      ],
+      "n": 1000000
+    }
+  ],
+  "rejectedFrames": [
+    "FE0A0100",
+    "",
+    "0000",
+    "FE"
+  ],
+  "statusFrames": [
+    {
+      "message": "FE0B000000000000000000000000000000000000000000000100000000000000000001010100000102011E0F",
+      "state": {
+        "erL": false,
+        "err1": false,
+        "err2": false,
+        "err3": false,
+        "fanErr": false,
+        "fanState": true,
+        "highTempErr": false,
+        "hotErr": false,
+        "hotState": true,
+        "lightState": false,
+        "moduleIsOn": true,
+        "motorErr": false,
+        "motorState": true,
+        "noPellets": false,
+        "primeState": false,
+        "recipeStep": 2,
+        "recipeTime": 5415
+      }
+    },
+    {
+      "message": "FE0B000000000000000000000000000000000000000000000100000000000000010001000001000000000000",
+      "state": {
+        "erL": false,
+        "err1": false,
+        "err2": false,
+        "err3": false,
+        "fanErr": false,
+        "fanState": true,
+        "highTempErr": false,
+        "hotErr": false,
+        "hotState": false,
+        "lightState": true,
+        "moduleIsOn": true,
+        "motorErr": false,
+        "motorState": false,
+        "noPellets": true,
+        "primeState": false,
+        "recipeStep": 0,
+        "recipeTime": 0
+      }
+    },
+    {
+      "message": "FE0B000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "state": {
+        "erL": false,
+        "err1": false,
+        "err2": false,
+        "err3": false,
+        "fanErr": false,
+        "fanState": false,
+        "highTempErr": false,
+        "hotErr": false,
+        "hotState": false,
+        "lightState": false,
+        "moduleIsOn": false,
+        "motorErr": false,
+        "motorState": false,
+        "noPellets": false,
+        "primeState": false,
+        "recipeStep": 0,
+        "recipeTime": 0
+      }
+    },
+    {
+      "message": "FE0B00000000000000000000000000000000000000000000010000000100000100010000000001000000002D",
+      "state": {
+        "erL": true,
+        "err1": false,
+        "err2": false,
+        "err3": false,
+        "fanErr": false,
+        "fanState": false,
+        "highTempErr": true,
+        "hotErr": false,
+        "hotState": false,
+        "lightState": false,
+        "moduleIsOn": true,
+        "motorErr": true,
+        "motorState": false,
+        "noPellets": false,
+        "primeState": true,
+        "recipeStep": 0,
+        "recipeTime": 45
+      }
+    }
+  ],
+  "temperatureFrames": [
+    {
+      "message": "FE0C01040501030209060009060009060002020502020502030101",
+      "state": {
+        "grillSetTemp": 225,
+        "grillTemp": 231,
+        "isFahrenheit": true,
+        "p1Target": 145,
+        "p1Temp": 132,
+        "p2Temp": null,
+        "p3Temp": null,
+        "p4Temp": null,
+        "smokerActTemp": 225
+      }
+    },
+    {
+      "message": "FE0C02000302000301090809060009060002050002050002040801",
+      "state": {
+        "grillSetTemp": 250,
+        "grillTemp": 248,
+        "isFahrenheit": true,
+        "p1Target": 203,
+        "p1Temp": 203,
+        "p2Temp": 198,
+        "p3Temp": null,
+        "p4Temp": null,
+        "smokerActTemp": 250
+      }
+    },
+    {
+      "message": "FE0C09060009060009060009060009060009060001080000070201",
+      "state": {
+        "grillSetTemp": 180,
+        "grillTemp": 72,
+        "isFahrenheit": true,
+        "p1Target": null,
+        "p1Temp": null,
+        "p2Temp": null,
+        "p3Temp": null,
+        "p4Temp": null,
+        "smokerActTemp": null
+      }
+    }
+  ],
+  "timedKeys": [
+    {
+      "key": [
+        143,
+        248,
+        112,
+        126,
+        146,
+        91,
+        204,
+        25
+      ],
+      "uptime": 0
+    },
+    {
+      "key": [
+        143,
+        248,
+        112,
+        126,
+        146,
+        91,
+        204,
+        25
+      ],
+      "uptime": 5
+    },
+    {
+      "key": [
+        143,
+        248,
+        112,
+        126,
+        146,
+        91,
+        204,
+        25
+      ],
+      "uptime": 5.5
+    },
+    {
+      "key": [
+        129,
+        143,
+        56,
+        233,
+        254,
+        216,
+        125,
+        108
+      ],
+      "uptime": 15
+    },
+    {
+      "key": [
+        137,
+        143,
+        56,
+        233,
+        254,
+        216,
+        125,
+        108
+      ],
+      "uptime": 100
+    },
+    {
+      "key": [
+        99,
+        116,
+        34,
+        201,
+        102,
+        26,
+        180,
+        183
+      ],
+      "uptime": 1234.5
+    },
+    {
+      "key": [
+        184,
+        255,
+        6,
+        87,
+        169,
+        60,
+        172,
+        207
+      ],
+      "uptime": 99999
+    }
+  ]
+}

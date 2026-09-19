@@ -9,3 +9,8 @@ __pycache__/
 *.pyc
 .DS_Store
 /tmp/
+
+# Swift / Xcode (iOS app)
+ios/PitBossKit/.build/
+ios/**/xcuserdata/
+*.xcuserstate

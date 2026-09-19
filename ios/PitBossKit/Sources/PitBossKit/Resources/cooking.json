@@ -1,0 +1,1109 @@
+{
+  "cuts" : [
+    {
+      "category" : "beef",
+      "grillTemp" : 250,
+      "methods" : [
+        "Texas crutch",
+        "Hot and fast"
+      ],
+      "name" : "Brisket — whole packer",
+      "note" : "Probe the flat, not the point — the leaner muscle decides when it's done, and the point will read hotter. Expect a stall around 150–170°.",
+      "targets" : [
+        {
+          "kind" : "texture",
+          "label" : "Slicing",
+          "temperature" : 203
+        },
+        {
+          "kind" : "texture",
+          "label" : "Pulling",
+          "temperature" : 205
+        }
+      ]
+    },
+    {
+      "category" : "beef",
+      "grillTemp" : 250,
+      "methods" : [
+        "Texas crutch"
+      ],
+      "name" : "Brisket — flat (lean)",
+      "note" : "The lean muscle, with little fat to protect it — a few degrees past done is the difference between sliceable and dry. Probe tenderness matters more here than the number; start checking at 195°.",
+      "targets" : [
+        {
+          "kind" : "texture",
+          "label" : "Slicing",
+          "temperature" : 200
+        },
+        {
+          "kind" : "texture",
+          "label" : "Very tender",
+          "temperature" : 203
+        }
+      ]
+    },
+    {
+      "category" : "beef",
+      "grillTemp" : 250,
+      "methods" : [
+
+      ],
+      "name" : "Brisket — point (deckle)",
+      "note" : "Far fattier and full of collagen, so it takes and wants more heat than the flat. Hard to overcook by comparison.",
+      "targets" : [
+        {
+          "kind" : "texture",
+          "label" : "Tender",
+          "temperature" : 205
+        },
+        {
+          "kind" : "texture",
+          "label" : "Burnt ends",
+          "temperature" : 207
+        }
+      ]
+    },
+    {
+      "category" : "beef",
+      "grillTemp" : 250,
+      "methods" : [
+
+      ],
+      "name" : "Burnt ends",
+      "note" : "Separate the point at about 195–200°, cube it, sauce, and return until the cubes are jiggly — usually 205–210°.",
+      "targets" : [
+        {
+          "kind" : "texture",
+          "label" : "Cubed & finished",
+          "temperature" : 207
+        }
+      ]
+    },
+    {
+      "category" : "beef",
+      "grillTemp" : 250,
+      "methods" : [
+
+      ],
+      "name" : "Beef short ribs",
+      "note" : "Like brisket: cooked well past safe, for texture.",
+      "targets" : [
+        {
+          "kind" : "texture",
+          "label" : "Probe tender",
+          "temperature" : 203
+        }
+      ]
+    },
+    {
+      "category" : "beef",
+      "grillTemp" : 250,
+      "methods" : [
+
+      ],
+      "name" : "Chuck roast (shredding)",
+      "targets" : [
+        {
+          "kind" : "texture",
+          "label" : "Shreddable",
+          "temperature" : 205
+        }
+      ]
+    },
+    {
+      "category" : "beef",
+      "methods" : [
+
+      ],
+      "name" : "Chuck roast (sliceable)",
+      "targets" : [
+        {
+          "kind" : "safeMinimum",
+          "label" : "USDA safe minimum",
+          "temperature" : 145
+        },
+        {
+          "kind" : "doneness",
+          "label" : "Medium",
+          "temperature" : 145
+        }
+      ]
+    },
+    {
+      "category" : "beef",
+      "grillTemp" : 225,
+      "methods" : [
+        "Reverse sear"
+      ],
+      "name" : "Steak (ribeye, strip, sirloin)",
+      "note" : "USDA's minimum for whole-muscle beef is 145° with a 3-minute rest. Rare and medium rare sit below it.",
+      "targets" : [
+        {
+          "kind" : "doneness",
+          "label" : "Rare",
+          "temperature" : 125
+        },
+        {
+          "kind" : "doneness",
+          "label" : "Medium rare",
+          "temperature" : 135
+        },
+        {
+          "kind" : "doneness",
+          "label" : "Medium",
+          "temperature" : 145
+        },
+        {
+          "kind" : "doneness",
+          "label" : "Medium well",
+          "temperature" : 150
+        },
+        {
+          "kind" : "doneness",
+          "label" : "Well done",
+          "temperature" : 160
+        }
+      ]
+    },
+    {
+      "category" : "beef",
+      "grillTemp" : 225,
+      "methods" : [
+        "Reverse sear"
+      ],
+      "name" : "Tri-tip",
+      "targets" : [
+        {
+          "kind" : "doneness",
+          "label" : "Rare",
+          "temperature" : 125
+        },
+        {
+          "kind" : "doneness",
+          "label" : "Medium rare",
+          "temperature" : 135
+        },
+        {
+          "kind" : "doneness",
+          "label" : "Medium",
+          "temperature" : 145
+        },
+        {
+          "kind" : "doneness",
+          "label" : "Medium well",
+          "temperature" : 150
+        },
+        {
+          "kind" : "doneness",
+          "label" : "Well done",
+          "temperature" : 160
+        }
+      ]
+    },
+    {
+      "category" : "beef",
+      "grillTemp" : 250,
+      "methods" : [
+        "Reverse sear"
+      ],
+      "name" : "Prime rib \/ standing rib roast",
+      "note" : "Pull about 5–10° below your target — a large roast carries over while resting.",
+      "targets" : [
+        {
+          "kind" : "doneness",
+          "label" : "Rare",
+          "temperature" : 125
+        },
+        {
+          "kind" : "doneness",
+          "label" : "Medium rare",
+          "temperature" : 135
+        },
+        {
+          "kind" : "doneness",
+          "label" : "Medium",
+          "temperature" : 145
+        },
+        {
+          "kind" : "doneness",
+          "label" : "Medium well",
+          "temperature" : 150
+        },
+        {
+          "kind" : "doneness",
+          "label" : "Well done",
+          "temperature" : 160
+        }
+      ]
+    },
+    {
+      "category" : "beef",
+      "methods" : [
+
+      ],
+      "name" : "Beef tenderloin",
+      "targets" : [
+        {
+          "kind" : "doneness",
+          "label" : "Rare",
+          "temperature" : 125
+        },
+        {
+          "kind" : "doneness",
+          "label" : "Medium rare",
+          "temperature" : 135
+        },
+        {
+          "kind" : "doneness",
+          "label" : "Medium",
+          "temperature" : 145
+        },
+        {
+          "kind" : "doneness",
+          "label" : "Medium well",
+          "temperature" : 150
+        },
+        {
+          "kind" : "doneness",
+          "label" : "Well done",
+          "temperature" : 160
+        }
+      ]
+    },
+    {
+      "category" : "beef",
+      "grillTemp" : 225,
+      "methods" : [
+        "Reverse sear"
+      ],
+      "name" : "Tomahawk \/ thick-cut steak",
+      "note" : "Thick cuts carry over more; pull a few degrees early. Thickness is exactly what reverse sear is for.",
+      "targets" : [
+        {
+          "kind" : "doneness",
+          "label" : "Rare",
+          "temperature" : 125
+        },
+        {
+          "kind" : "doneness",
+          "label" : "Medium rare",
+          "temperature" : 135
+        },
+        {
+          "kind" : "doneness",
+          "label" : "Medium",
+          "temperature" : 145
+        },
+        {
+          "kind" : "doneness",
+          "label" : "Medium well",
+          "temperature" : 150
+        },
+        {
+          "kind" : "doneness",
+          "label" : "Well done",
+          "temperature" : 160
+        }
+      ]
+    },
+    {
+      "category" : "pork",
+      "grillTemp" : 250,
+      "methods" : [
+        "Texas crutch"
+      ],
+      "name" : "Pork butt (upper shoulder)",
+      "note" : "The fattier, more forgiving half of the shoulder and the usual choice for pulled pork. Probe tenderness beats the thermometer; the stall around 160° can last hours.",
+      "targets" : [
+        {
+          "kind" : "texture",
+          "label" : "Pulling",
+          "temperature" : 203
+        },
+        {
+          "kind" : "texture",
+          "label" : "Sliceable",
+          "temperature" : 195
+        }
+      ]
+    },
+    {
+      "category" : "pork",
+      "grillTemp" : 250,
+      "methods" : [
+
+      ],
+      "name" : "Pork picnic (lower shoulder)",
+      "note" : "Leaner and more sinewy than the butt, with a skin cap. Takes longer and wants a couple more degrees to break down.",
+      "targets" : [
+        {
+          "kind" : "texture",
+          "label" : "Pulling",
+          "temperature" : 205
+        }
+      ]
+    },
+    {
+      "category" : "pork",
+      "grillTemp" : 250,
+      "methods" : [
+        "3-2-1"
+      ],
+      "name" : "Spare ribs",
+      "note" : "Bend test: lifted a third of the way along, the rack should bend and the surface crack. Meatier and fattier than baby backs.",
+      "targets" : [
+        {
+          "kind" : "texture",
+          "label" : "Probe tender",
+          "temperature" : 203
+        }
+      ]
+    },
+    {
+      "category" : "pork",
+      "grillTemp" : 250,
+      "methods" : [
+        "3-2-1"
+      ],
+      "name" : "St. Louis ribs",
+      "note" : "Spare ribs trimmed square — cooks more evenly than a full spare rack because the thickness is uniform.",
+      "targets" : [
+        {
+          "kind" : "texture",
+          "label" : "Probe tender",
+          "temperature" : 203
+        }
+      ]
+    },
+    {
+      "category" : "pork",
+      "grillTemp" : 250,
+      "methods" : [
+        "2-2-1"
+      ],
+      "name" : "Baby back ribs",
+      "note" : "Leaner and smaller than spares, so they finish earlier — start the bend test around 195°.",
+      "targets" : [
+        {
+          "kind" : "texture",
+          "label" : "Probe tender",
+          "temperature" : 199
+        }
+      ]
+    },
+    {
+      "category" : "pork",
+      "grillTemp" : 250,
+      "methods" : [
+
+      ],
+      "name" : "Pork loin",
+      "note" : "145° with a 3-minute rest. A little pink is fine and expected.",
+      "targets" : [
+        {
+          "kind" : "safeMinimum",
+          "label" : "USDA safe minimum",
+          "temperature" : 145
+        },
+        {
+          "kind" : "doneness",
+          "label" : "Juicy",
+          "temperature" : 145
+        },
+        {
+          "kind" : "doneness",
+          "label" : "Well done",
+          "temperature" : 160
+        }
+      ]
+    },
+    {
+      "category" : "pork",
+      "methods" : [
+
+      ],
+      "name" : "Pork tenderloin",
+      "targets" : [
+        {
+          "kind" : "safeMinimum",
+          "label" : "USDA safe minimum",
+          "temperature" : 145
+        },
+        {
+          "kind" : "doneness",
+          "label" : "Well done",
+          "temperature" : 160
+        }
+      ]
+    },
+    {
+      "category" : "pork",
+      "methods" : [
+
+      ],
+      "name" : "Pork chops",
+      "targets" : [
+        {
+          "kind" : "safeMinimum",
+          "label" : "USDA safe minimum",
+          "temperature" : 145
+        },
+        {
+          "kind" : "doneness",
+          "label" : "Well done",
+          "temperature" : 160
+        }
+      ]
+    },
+    {
+      "category" : "pork",
+      "grillTemp" : 250,
+      "methods" : [
+
+      ],
+      "name" : "Pork belly",
+      "targets" : [
+        {
+          "kind" : "texture",
+          "label" : "Rendered",
+          "temperature" : 200
+        }
+      ]
+    },
+    {
+      "category" : "pork",
+      "methods" : [
+
+      ],
+      "name" : "Ham (fresh, uncooked)",
+      "targets" : [
+        {
+          "kind" : "safeMinimum",
+          "label" : "USDA safe minimum",
+          "temperature" : 145
+        }
+      ]
+    },
+    {
+      "category" : "pork",
+      "methods" : [
+
+      ],
+      "name" : "Ham (fully cooked, reheating)",
+      "note" : "140° for a USDA-inspected ham; 165° otherwise. Reheating a fully cooked product has a lower floor than raw pork.",
+      "safeFloorOverride" : 140,
+      "targets" : [
+        {
+          "kind" : "safeMinimum",
+          "label" : "Reheated",
+          "temperature" : 140
+        },
+        {
+          "kind" : "safeMinimum",
+          "label" : "USDA (not inspected)",
+          "temperature" : 165
+        }
+      ]
+    },
+    {
+      "category" : "poultry",
+      "grillTemp" : 375,
+      "methods" : [
+
+      ],
+      "name" : "Chicken breast",
+      "note" : "165° is a floor, not a target — measure the thickest part, well clear of bone, and check more than one spot. A breast that reads 165° at the edge can be well under in the middle, which is how chicken ends up undercooked.",
+      "targets" : [
+        {
+          "kind" : "safeMinimum",
+          "label" : "USDA safe minimum",
+          "temperature" : 165
+        },
+        {
+          "kind" : "doneness",
+          "label" : "Safer margin",
+          "temperature" : 170
+        }
+      ]
+    },
+    {
+      "category" : "poultry",
+      "grillTemp" : 375,
+      "methods" : [
+
+      ],
+      "name" : "Chicken thighs",
+      "note" : "Dark meat is much better past the floor: at 165° it is safe but rubbery, and at 175–185° the connective tissue has softened. Hard to overcook — aim high.",
+      "targets" : [
+        {
+          "kind" : "safeMinimum",
+          "label" : "USDA safe minimum",
+          "temperature" : 165
+        },
+        {
+          "kind" : "texture",
+          "label" : "Rendered",
+          "temperature" : 180
+        }
+      ]
+    },
+    {
+      "category" : "poultry",
+      "grillTemp" : 375,
+      "methods" : [
+        "Spatchcock"
+      ],
+      "name" : "Chicken (whole)",
+      "note" : "Probe the thickest part of the thigh, clear of bone, and the breast separately — they finish at different times. Thigh 175–185°, breast 165°. Spatchcocking largely removes the gap.",
+      "targets" : [
+        {
+          "kind" : "safeMinimum",
+          "label" : "USDA safe minimum",
+          "temperature" : 165
+        }
+      ]
+    },
+    {
+      "category" : "poultry",
+      "grillTemp" : 400,
+      "methods" : [
+        "0 to 400"
+      ],
+      "name" : "Chicken wings",
+      "note" : "165° is safe but the skin is rubbery. Wings want 175–185° so the fat and connective tissue render. Skin needs heat — low and slow gives flabby wings.",
+      "targets" : [
+        {
+          "kind" : "safeMinimum",
+          "label" : "USDA safe minimum",
+          "temperature" : 165
+        },
+        {
+          "kind" : "texture",
+          "label" : "Crisp skin",
+          "temperature" : 185
+        }
+      ]
+    },
+    {
+      "category" : "poultry",
+      "grillTemp" : 325,
+      "methods" : [
+        "Spatchcock"
+      ],
+      "name" : "Turkey (whole)",
+      "note" : "Probe the thigh, clear of bone — it decides. Thigh 175°, breast 165°. Spatchcocking closes the gap between them.",
+      "targets" : [
+        {
+          "kind" : "safeMinimum",
+          "label" : "USDA safe minimum",
+          "temperature" : 165
+        }
+      ]
+    },
+    {
+      "category" : "poultry",
+      "grillTemp" : 325,
+      "methods" : [
+
+      ],
+      "name" : "Turkey breast",
+      "targets" : [
+        {
+          "kind" : "safeMinimum",
+          "label" : "USDA safe minimum",
+          "temperature" : 165
+        }
+      ]
+    },
+    {
+      "category" : "poultry",
+      "methods" : [
+
+      ],
+      "name" : "Turkey thigh \/ leg",
+      "targets" : [
+        {
+          "kind" : "safeMinimum",
+          "label" : "USDA safe minimum",
+          "temperature" : 165
+        },
+        {
+          "kind" : "texture",
+          "label" : "Rendered",
+          "temperature" : 175
+        }
+      ]
+    },
+    {
+      "category" : "poultry",
+      "methods" : [
+
+      ],
+      "name" : "Duck breast",
+      "note" : "Duck is commonly cooked to medium rare; USDA's poultry minimum is still 165°.",
+      "targets" : [
+        {
+          "kind" : "doneness",
+          "label" : "Medium rare",
+          "temperature" : 135
+        },
+        {
+          "kind" : "doneness",
+          "label" : "Medium",
+          "temperature" : 145
+        },
+        {
+          "kind" : "safeMinimum",
+          "label" : "USDA safe minimum",
+          "temperature" : 165
+        }
+      ]
+    },
+    {
+      "category" : "lamb",
+      "methods" : [
+
+      ],
+      "name" : "Lamb leg \/ shoulder",
+      "targets" : [
+        {
+          "kind" : "doneness",
+          "label" : "Rare",
+          "temperature" : 125
+        },
+        {
+          "kind" : "doneness",
+          "label" : "Medium rare",
+          "temperature" : 135
+        },
+        {
+          "kind" : "doneness",
+          "label" : "Medium",
+          "temperature" : 145
+        },
+        {
+          "kind" : "doneness",
+          "label" : "Medium well",
+          "temperature" : 150
+        },
+        {
+          "kind" : "doneness",
+          "label" : "Well done",
+          "temperature" : 160
+        }
+      ]
+    },
+    {
+      "category" : "lamb",
+      "methods" : [
+
+      ],
+      "name" : "Lamb chops \/ rack",
+      "targets" : [
+        {
+          "kind" : "doneness",
+          "label" : "Rare",
+          "temperature" : 125
+        },
+        {
+          "kind" : "doneness",
+          "label" : "Medium rare",
+          "temperature" : 135
+        },
+        {
+          "kind" : "doneness",
+          "label" : "Medium",
+          "temperature" : 145
+        },
+        {
+          "kind" : "doneness",
+          "label" : "Medium well",
+          "temperature" : 150
+        },
+        {
+          "kind" : "doneness",
+          "label" : "Well done",
+          "temperature" : 160
+        }
+      ]
+    },
+    {
+      "category" : "lamb",
+      "methods" : [
+
+      ],
+      "name" : "Lamb shoulder (pulled)",
+      "targets" : [
+        {
+          "kind" : "texture",
+          "label" : "Pulling",
+          "temperature" : 203
+        }
+      ]
+    },
+    {
+      "category" : "lamb",
+      "methods" : [
+
+      ],
+      "name" : "Veal chops \/ roast",
+      "targets" : [
+        {
+          "kind" : "safeMinimum",
+          "label" : "USDA safe minimum",
+          "temperature" : 145
+        },
+        {
+          "kind" : "doneness",
+          "label" : "Medium",
+          "temperature" : 150
+        }
+      ]
+    },
+    {
+      "category" : "seafood",
+      "grillTemp" : 225,
+      "methods" : [
+
+      ],
+      "name" : "Salmon",
+      "note" : "Often cooked to 125–130°. USDA's fish minimum is 145°.",
+      "targets" : [
+        {
+          "kind" : "doneness",
+          "label" : "Medium",
+          "temperature" : 125
+        },
+        {
+          "kind" : "doneness",
+          "label" : "Medium well",
+          "temperature" : 135
+        },
+        {
+          "kind" : "safeMinimum",
+          "label" : "USDA safe minimum",
+          "temperature" : 145
+        }
+      ]
+    },
+    {
+      "category" : "seafood",
+      "methods" : [
+
+      ],
+      "name" : "White fish (cod, halibut)",
+      "targets" : [
+        {
+          "kind" : "doneness",
+          "label" : "Flaky",
+          "temperature" : 140
+        },
+        {
+          "kind" : "safeMinimum",
+          "label" : "USDA safe minimum",
+          "temperature" : 145
+        }
+      ]
+    },
+    {
+      "category" : "seafood",
+      "methods" : [
+
+      ],
+      "name" : "Tuna",
+      "targets" : [
+        {
+          "kind" : "doneness",
+          "label" : "Rare",
+          "temperature" : 115
+        },
+        {
+          "kind" : "doneness",
+          "label" : "Medium rare",
+          "temperature" : 125
+        },
+        {
+          "kind" : "safeMinimum",
+          "label" : "USDA safe minimum",
+          "temperature" : 145
+        }
+      ]
+    },
+    {
+      "category" : "seafood",
+      "methods" : [
+
+      ],
+      "name" : "Shrimp \/ prawns",
+      "note" : "Go by opacity and curl; a probe is awkward in something this small.",
+      "targets" : [
+        {
+          "kind" : "doneness",
+          "label" : "Opaque",
+          "temperature" : 120
+        }
+      ]
+    },
+    {
+      "category" : "ground",
+      "grillTemp" : 400,
+      "methods" : [
+
+      ],
+      "name" : "Burgers (beef, lamb, pork)",
+      "note" : "Grinding spreads surface bacteria through the meat, which is why the minimum is higher than for a steak.",
+      "targets" : [
+        {
+          "kind" : "safeMinimum",
+          "label" : "USDA safe minimum",
+          "temperature" : 160
+        }
+      ]
+    },
+    {
+      "category" : "ground",
+      "methods" : [
+
+      ],
+      "name" : "Ground poultry",
+      "targets" : [
+        {
+          "kind" : "safeMinimum",
+          "label" : "USDA safe minimum",
+          "temperature" : 165
+        }
+      ]
+    },
+    {
+      "category" : "ground",
+      "methods" : [
+
+      ],
+      "name" : "Meatloaf",
+      "targets" : [
+        {
+          "kind" : "safeMinimum",
+          "label" : "USDA safe minimum",
+          "temperature" : 160
+        }
+      ]
+    },
+    {
+      "category" : "ground",
+      "methods" : [
+
+      ],
+      "name" : "Fresh sausage",
+      "targets" : [
+        {
+          "kind" : "safeMinimum",
+          "label" : "USDA safe minimum",
+          "temperature" : 160
+        },
+        {
+          "kind" : "safeMinimum",
+          "label" : "Poultry sausage",
+          "temperature" : 165
+        }
+      ]
+    },
+    {
+      "category" : "other",
+      "methods" : [
+
+      ],
+      "name" : "Smoked cheese",
+      "note" : "Keep the grill below 90° or it melts. Really a cold-smoke job.",
+      "targets" : [
+        {
+          "kind" : "doneness",
+          "label" : "Cold smoke",
+          "temperature" : 90
+        }
+      ]
+    },
+    {
+      "category" : "other",
+      "methods" : [
+
+      ],
+      "name" : "Reheating leftovers",
+      "targets" : [
+        {
+          "kind" : "safeMinimum",
+          "label" : "USDA safe minimum",
+          "temperature" : 165
+        }
+      ]
+    }
+  ],
+  "methods" : [
+    {
+      "grillTemp" : 250,
+      "name" : "Texas crutch",
+      "note" : "Paper breathes and keeps bark; foil traps steam and is quicker but softens it. The stall is evaporative cooling, not a problem with your fire.",
+      "steps" : [
+        {
+          "detail" : "Run until the bark is set and the internal temperature stalls, usually 160–170°.",
+          "grillTemp" : 250,
+          "title" : "Smoke bare"
+        },
+        {
+          "detail" : "Butcher paper for a firmer bark, foil to go faster and softer.",
+          "grillTemp" : 250,
+          "title" : "Wrap"
+        },
+        {
+          "detail" : "Back on until probe tender — 203° for slicing.",
+          "grillTemp" : 250,
+          "title" : "Finish"
+        }
+      ],
+      "summary" : "Wrap at the stall to push through it and keep the bark from drying."
+    },
+    {
+      "grillTemp" : 300,
+      "name" : "Hot and fast",
+      "note" : "Roughly 8 hours rather than 12–16. The long rest matters more here than the cook temperature.",
+      "steps" : [
+        {
+          "detail" : "275–300° until the stall.",
+          "grillTemp" : 300,
+          "title" : "Smoke"
+        },
+        {
+          "detail" : "Butcher paper, then back on.",
+          "grillTemp" : 300,
+          "title" : "Wrap"
+        },
+        {
+          "detail" : "To probe tender, then rest at least an hour.",
+          "grillTemp" : 300,
+          "title" : "Finish"
+        }
+      ],
+      "summary" : "Brisket at 275–300° instead of 225° — hours shorter, barely different."
+    },
+    {
+      "name" : "Reverse sear",
+      "note" : "Better than searing first: the meat spends less time in the grey band, so it's pink corner to corner.",
+      "steps" : [
+        {
+          "detail" : "225° until the centre is 10–15° below your target.",
+          "grillTemp" : 225,
+          "title" : "Low and slow"
+        },
+        {
+          "detail" : "Off the heat for 10 minutes while the grill comes up.",
+          "minutes" : 10,
+          "title" : "Rest"
+        },
+        {
+          "detail" : "500° or a hot pan, 60–90 seconds a side, just for the crust.",
+          "grillTemp" : 500,
+          "title" : "Sear"
+        }
+      ],
+      "summary" : "Low heat to just under target, then a hard sear — even doneness edge to edge."
+    },
+    {
+      "grillTemp" : 250,
+      "name" : "3-2-1",
+      "note" : "Timings are a framework, not a rule — check with the bend test near the end. 3-2-1 can overshoot into mushy if the ribs were small; many cooks run 3-1½-1.",
+      "steps" : [
+        {
+          "detail" : "Bare on the grate, meat side up. Builds bark and takes on smoke.",
+          "grillTemp" : 250,
+          "minutes" : 180,
+          "title" : "3 — Smoke"
+        },
+        {
+          "detail" : "Wrap in foil with a little butter, brown sugar and liquid. Steams the ribs tender and pushes through the stall.",
+          "grillTemp" : 250,
+          "minutes" : 120,
+          "title" : "2 — Wrap"
+        },
+        {
+          "detail" : "Unwrap, sauce, and return until the glaze tacks up.",
+          "grillTemp" : 250,
+          "minutes" : 60,
+          "title" : "1 — Sauce"
+        }
+      ],
+      "summary" : "The standard spare-rib method: smoke, wrap, then set the sauce."
+    },
+    {
+      "grillTemp" : 250,
+      "name" : "2-2-1",
+      "note" : "Baby backs finish sooner than spares. Start the bend test at the end of the wrap stage.",
+      "steps" : [
+        {
+          "detail" : "Bare on the grate, meat side up.",
+          "grillTemp" : 250,
+          "minutes" : 120,
+          "title" : "2 — Smoke"
+        },
+        {
+          "detail" : "Foil with butter, brown sugar and liquid.",
+          "grillTemp" : 250,
+          "minutes" : 120,
+          "title" : "2 — Wrap"
+        },
+        {
+          "detail" : "Unwrap, sauce, return to set.",
+          "grillTemp" : 250,
+          "minutes" : 60,
+          "title" : "1 — Sauce"
+        }
+      ],
+      "summary" : "3-2-1 shortened for baby backs, which are leaner and smaller."
+    },
+    {
+      "grillTemp" : 400,
+      "name" : "Spatchcock",
+      "note" : "The usual problem with whole birds is the breast drying out while the thighs catch up. Flattening largely removes it.",
+      "steps" : [
+        {
+          "detail" : "Cut out the backbone and press the bird flat.",
+          "title" : "Prep"
+        },
+        {
+          "detail" : "375–400°. Breast and thigh finish closer together than on a whole bird.",
+          "grillTemp" : 400,
+          "title" : "Roast hot"
+        }
+      ],
+      "summary" : "Backbone out, bird flattened — cooks evenly and the skin crisps."
+    },
+    {
+      "grillTemp" : 400,
+      "name" : "0 to 400",
+      "note" : "Expect 40–50 minutes depending on how fast your grill climbs. Pull at 175–185° for skin that's actually crisp; 165° is safe but rubbery.",
+      "steps" : [
+        {
+          "detail" : "Arrange wings on the grate with the grill off. No preheat — that's the point.",
+          "minutes" : 0,
+          "title" : "Load cold"
+        },
+        {
+          "detail" : "Set 400° and let it climb with the wings inside. The gradual rise renders fat that a preheated grill would seal in.",
+          "grillTemp" : 400,
+          "minutes" : 45,
+          "title" : "Run to 400°"
+        }
+      ],
+      "summary" : "Wings on a cold grill, then straight to 400° — the slow ramp renders the fat before the skin sets."
+    }
+  ],
+  "note" : "Shared cooking knowledge for the iOS and desktop apps. See docs\/adr\/0007. Safety floors are USDA FSIS figures; do not edit without reading ADR 0009.",
+  "safeMinimums" : {
+    "beef" : 145,
+    "ground" : 160,
+    "lamb" : 145,
+    "pork" : 145,
+    "poultry" : 165,
+    "seafood" : 145
+  },
+  "version" : 1
+}

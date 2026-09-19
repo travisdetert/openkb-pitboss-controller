@@ -90,11 +90,14 @@ def vertical_gradient(size, stops):
 
 # ---- compose ---------------------------------------------------------------
 
-def render():
+def render(radius_factor: float = 0.225):
+    """Compose the icon. `radius_factor` is the corner radius as a fraction of
+    the width; iOS wants 0 (a full square) because the OS applies its own mask
+    and a pre-rounded icon shows dark corners inside it."""
     img = Image.new("RGBA", (W, W), (0, 0, 0, 0))
 
     # Rounded-square background with a warm vertical gradient.
-    radius = int(W * 0.225)
+    radius = int(W * radius_factor)
     bg_grad = vertical_gradient((W, W), [
         (0.0, (58, 38, 24)),    # warm top
         (0.55, (33, 26, 19)),
@@ -153,10 +156,18 @@ def render():
     img = Image.alpha_composite(img, core_layer)
 
     # Subtle top sheen on the background for a little depth.
-    sheen = Image.new("RGBA", (W, W), (0, 0, 0, 0))
-    ImageDraw.Draw(sheen).rounded_rectangle(
-        [0, 0, W - 1, int(W * 0.5)], radius, fill=(255, 255, 255, 12))
-    sheen.putalpha(sheen.split()[3].filter(ImageFilter.GaussianBlur(W * 0.02)))
+    #
+    # A smooth vertical falloff, not a rectangle: filling the top half and
+    # blurring it still left a hard horizontal seam across the middle of the
+    # icon. The rounded corners hid the ends of that line on macOS, but it was
+    # always there, and on the square iOS render it is unmistakable.
+    sheen_alpha = Image.new("L", (1, W))
+    ap = sheen_alpha.load()
+    for y in range(W):
+        t = y / (W - 1)
+        ap[0, y] = int(round(16 * (1.0 - t / 0.6) ** 1.8)) if t < 0.6 else 0
+    sheen = Image.new("RGBA", (W, W), (255, 255, 255, 0))
+    sheen.putalpha(sheen_alpha.resize((W, W)))
     img = Image.alpha_composite(img, Image.composite(
         sheen, Image.new("RGBA", (W, W), (0, 0, 0, 0)), mask))
 
@@ -175,6 +186,47 @@ def render_tray():
     ImageDraw.Draw(mask).polygon(pts, fill=255)
     black = Image.new("RGBA", (S, S), (0, 0, 0, 255))
     return Image.composite(black, img, mask)
+
+
+# iOS app icons are a single 1024 square, opaque, with no alpha channel —
+# the App Store rejects alpha and iOS masks the corners itself.
+IOS_ICONSET = os.path.join(
+    ROOT, "ios", "App", "PitBoss", "Assets.xcassets", "AppIcon.appiconset")
+
+
+def render_ios():
+    """Same artwork, square and flattened onto an opaque background."""
+    icon = render(radius_factor=0.0)
+    flat = Image.new("RGB", icon.size, (18, 13, 9))   # the gradient's base tone
+    flat.paste(icon, (0, 0), icon)
+    return flat
+
+
+def write_ios_icon():
+    os.makedirs(IOS_ICONSET, exist_ok=True)
+    path = os.path.join(IOS_ICONSET, "icon-1024.png")
+    icon = render_ios()
+    assert icon.mode == "RGB", "iOS icons must not carry an alpha channel"
+    icon.save(path)
+
+    contents = os.path.join(IOS_ICONSET, "Contents.json")
+    with open(contents, "w", encoding="utf-8") as fh:
+        fh.write(
+            '{\n'
+            '  "images" : [\n'
+            '    {\n'
+            '      "filename" : "icon-1024.png",\n'
+            '      "idiom" : "universal",\n'
+            '      "platform" : "ios",\n'
+            '      "size" : "1024x1024"\n'
+            '    }\n'
+            '  ],\n'
+            '  "info" : {\n'
+            '    "author" : "xcode",\n'
+            '    "version" : 1\n'
+            '  }\n'
+            '}\n')
+    print("wrote", path)
 
 
 def main():
@@ -201,6 +253,8 @@ def main():
     tray.resize((16, 16), Image.LANCZOS).save(os.path.join(BUILD, "trayTemplate.png"))
     tray.resize((32, 32), Image.LANCZOS).save(os.path.join(BUILD, "trayTemplate@2x.png"))
     print("wrote tray template icons")
+
+    write_ios_icon()
 
 
 if __name__ == "__main__":

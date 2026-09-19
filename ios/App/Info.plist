@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  Only the keys the INFOPLIST_KEY_* build settings cannot express live here;
+	  Xcode merges its generated keys into this file. UIBackgroundModes is an
+	  array, which those settings do not support.
+
+	  bluetooth-central is required so a graceful shutdown keeps running when
+	  the phone is pocketed. Without it iOS suspends the app mid-cool-down and
+	  the `off` command is never sent. (The grill would simply hold at 200°,
+	  which is safe but leaves the cook unfinished.)
+	-->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>bluetooth-central</string>
+	</array>
+</dict>
+</plist>
