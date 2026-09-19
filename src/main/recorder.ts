@@ -14,7 +14,7 @@
 import { app } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
-import { CookMeta, GrillState, MaintenanceState, NoticeLevel, Sample } from '../shared/protocol';
+import { CookEvent, CookEventKind, CookMeta, GrillState, MaintenanceState, NoticeLevel, Sample } from '../shared/protocol';
 import { SettingsStore } from './store';
 import { classifyThermal, TempPoint, THERMAL, ThermalThresholds } from './thermal';
 import { freshMaintenance, isFlareup, maintenanceDue, maintenanceReasons, MaintenanceThresholds } from './maintenance';
@@ -221,7 +221,12 @@ export class Recorder {
       if (prevOn === false) {
         this.notify('Grill started', 'Your grill is powering up. 🔥');
       }
+    } else if (on && prevOn === false && this.cookId) {
+      // Relit while the record is still open — the fire stopped and restarted,
+      // which is exactly the disruption a cook wants to see in the history.
+      this.recordEvent('grill-on', now);
     } else if (!on && prevOn && this.cookId) {
+      this.recordEvent('grill-off', now);
       this.endCook(now);
     }
   }
@@ -330,6 +335,7 @@ export class Recorder {
       }
     }
 
+    if (!!state.noPellets && !this.pelletsFired) this.recordEvent('out-of-pellets');
     this.edge('noPellets', !!state.noPellets, 'pelletsFired',
       'Out of pellets', 'The hopper is empty — refill to keep the fire going.');
 
@@ -408,6 +414,9 @@ export class Recorder {
     if (v.pellet) {
       if (!this.pelletLowFired) {
         this.pelletLowFired = true;
+        // Only record if the hard flag hasn't already: one outage, one event,
+        // or the estimator double-counts the hour it costs.
+        if (!this.pelletsFired) this.recordEvent('out-of-pellets', now);
         this.notify('Running low on pellets?',
           `Temp has fallen to ${temp}° (set ${set}°) and keeps dropping — check the hopper and firepot.`);
       }
@@ -495,6 +504,43 @@ export class Recorder {
       } catch { /* skip malformed line */ }
     }
     return out;
+  }
+
+  // Events for one cook. Deliberately a separate reader from `readCook`: an
+  // event line carries `at`, never `t`, so the sample reader skips it and this
+  // one skips samples. Same file, two disjoint views — which is what lets iOS
+  // and the desktop read each other's cooks without either understanding all
+  // of the other's lines.
+  readCookEvents(id: string): CookEvent[] {
+    if (!isValidCookId(id)) return [];
+    const file = path.join(this.dir, `${id}.jsonl`);
+    let raw: string;
+    try {
+      raw = fs.readFileSync(file, 'utf8');
+    } catch {
+      return [];
+    }
+    const out: CookEvent[] = [];
+    for (const line of raw.split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        const obj = JSON.parse(line);
+        if (typeof obj.at === 'number' && typeof obj.kind === 'string') out.push(obj as CookEvent);
+      } catch { /* skip malformed line */ }
+    }
+    return out;
+  }
+
+  /** Events for the cook currently being recorded (empty when idle). */
+  liveEvents(): CookEvent[] {
+    return this.cookId ? this.readCookEvents(this.cookId) : [];
+  }
+
+  /** Record something that happened to the cook rather than a reading. */
+  recordEvent(kind: CookEventKind, now = Date.now(), note?: string): void {
+    if (!this.cookId) return;
+    this.writeLine({ at: now, kind, ...(note ? { note } : {}) });
+    log(`cook event: ${kind}`);
   }
 
   private metaFor(filename: string): CookMeta | null {

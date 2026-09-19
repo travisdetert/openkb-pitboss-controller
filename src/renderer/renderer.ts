@@ -34,6 +34,7 @@ interface PelletState {
   refilledAt: number;
 }
 interface Settings {
+  theme?: 'auto' | 'light' | 'dark';
   setpoint: number;
   probeTargets: Record<number, number>;
   probeLabels?: Record<number, string>;
@@ -96,11 +97,62 @@ interface PitbossApi {
   renameCook(id: string, name: string): Promise<boolean>;
   shutdown(mode: 'auto' | 'now' | 'cancel'): Promise<unknown>;
   cleaned(): Promise<unknown>;
+  getCooking(): Promise<CookingData | null>;
+  getCookEvents(): Promise<CookEvent[]>;
   getLoginItem(): Promise<boolean>;
   setLoginItem(open: boolean): Promise<boolean>;
   onEvent(cb: (evt: SidecarEvent) => void): () => void;
 }
 interface Window { pitboss: PitbossApi; }
+
+// ---- shared modules --------------------------------------------------------
+// PBCooking and PBEstimate are the compiled src/shared/ modules, wrapped into
+// globals at build time (scripts/copy-assets.js) so this plain script and the
+// main process run one implementation rather than two. The shapes below mirror
+// their exports, in the same spirit as the protocol types above.
+
+type TargetKind = 'safeMinimum' | 'doneness' | 'texture';
+type MeatCategory = 'beef' | 'pork' | 'poultry' | 'lamb' | 'seafood' | 'ground' | 'other';
+interface MeatTarget { label: string; temperature: number; kind: TargetKind; }
+interface MethodStep { title: string; detail: string; minutes?: number; grillTemp?: number; }
+interface CookMethod {
+  name: string; summary: string; steps: MethodStep[]; grillTemp?: number; note?: string;
+}
+interface MeatCut {
+  name: string; category: MeatCategory; targets: MeatTarget[]; note?: string;
+  grillTemp?: number; methods: CookMethod[]; safeFloorOverride?: number;
+}
+interface CookingData {
+  version: number; cuts: MeatCut[]; methods: CookMethod[];
+  safeMinimums: Partial<Record<MeatCategory, number>>; note?: string;
+}
+interface CookEvent { at: number; kind: string; note?: string; }
+
+type Allowance = { type: 'stall'; seconds: number }
+  | { type: 'pelletOutage'; count: number; seconds: number };
+type Verdict =
+  | { kind: 'eta'; seconds: number; ratePerHour: number; phase: string; allowances: Allowance[] }
+  | { kind: 'alreadyThere' } | { kind: 'stalled'; sinceSeconds: number }
+  | { kind: 'tooEarly' } | { kind: 'noTarget' };
+
+declare const PBCooking: {
+  CATEGORY_LABELS: Record<MeatCategory, string>;
+  CATEGORY_ORDER: MeatCategory[];
+  cutId(cut: MeatCut): string;
+  suggestedTarget(cut: MeatCut): MeatTarget | null;
+  safeFloor(cut: MeatCut, data: CookingData): number | null;
+  isBelowSafeMinimum(target: MeatTarget, cut: MeatCut, data: CookingData): boolean;
+  searchCuts(data: CookingData, q: string): MeatCut[];
+  methodDurationLabel(m: CookMethod): string | null;
+  methodTotalMinutes(m: CookMethod): number | null;
+};
+declare const PBEstimate: {
+  estimate(samples: Sample[], probe: number, target: number | null | undefined,
+           events: { at: number; kind: string }[], now?: number): Verdict;
+  estimateLabel(v: Verdict): string | null;
+  explanation(v: Verdict): string | null;
+  finishTime(v: Verdict, now?: number): number | null;
+};
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) =>
   document.getElementById(id) as T;
@@ -135,6 +187,283 @@ const OVER_TARGET_MARGIN = 5;
 // Optional user labels per probe ("Chicken", "Pork Shoulder"), persisted and
 // snapshotted into each recorded cook so past sessions show what was cooking.
 const probeLabels: Record<number, string> = {};
+
+// ---- cooking knowledge base + cook estimates -------------------------------
+// The catalogue is loaded once at boot; cook events (pellet outages and the
+// like) are refreshed periodically because they change the estimate — an outage
+// costs roughly an hour that the measured rate cannot see.
+let cooking: CookingData | null = null;
+let cookEvents: CookEvent[] = [];
+// What the user said is on each probe, so the panel can show "Brisket — flat"
+// rather than just a number, and so a method knows what it is cooking.
+const probeCuts: Record<number, string> = {};
+// The method being followed, if any: its name, when it started, and the stage.
+let activeMethod: { method: CookMethod; startedAt: number } | null = null;
+
+function cutByName(name: string): MeatCut | null {
+  return cooking?.cuts.find((c) => c.name === name) ?? null;
+}
+
+// The estimate for one probe, against the samples currently on screen.
+function probeVerdict(probe: number): Verdict {
+  const samples = viewCookId ? viewSamples : liveSamples;
+  return PBEstimate.estimate(samples, probe, probeTargets[probe] ?? null, cookEvents);
+}
+
+// Which stage of the active method we are in, by elapsed time. Only methods
+// whose stages declare a duration can be tracked this way; the rest are shown
+// as a checklist with no current stage, which is honest about what is known.
+function methodStage(): { index: number; step: MethodStep; endsAt: number } | null {
+  if (!activeMethod) return null;
+  const { method, startedAt } = activeMethod;
+  let acc = startedAt;
+  for (let i = 0; i < method.steps.length; i++) {
+    const mins = method.steps[i].minutes;
+    if (mins === undefined) return null;
+    const endsAt = acc + mins * 60_000;
+    if (Date.now() < endsAt) return { index: i, step: method.steps[i], endsAt };
+    acc = endsAt;
+  }
+  // Past the last stage — report the final one as current rather than nothing.
+  const last = method.steps.length - 1;
+  return last >= 0 ? { index: last, step: method.steps[last], endsAt: acc } : null;
+}
+
+function renderMethodBanner(): void {
+  const wrap = $('methodBanner');
+  if (!activeMethod) { wrap.classList.add('hidden'); return; }
+  wrap.classList.remove('hidden');
+  const { method } = activeMethod;
+  $('methodName').textContent = method.name;
+  const stage = methodStage();
+  if (stage) {
+    const left = Math.max(0, stage.endsAt - Date.now());
+    const mins = Math.round(left / 60_000);
+    $('methodStage').textContent =
+      `${stage.step.title} — ${mins > 0 ? `${fmtDuration(mins / 60)} left` : 'due now'}`;
+    $('methodDetail').textContent = stage.step.detail;
+  } else {
+    $('methodStage').textContent = method.summary;
+    $('methodDetail').textContent = method.note ?? '';
+  }
+  $('methodSteps').innerHTML = method.steps.map((st, i) => {
+    const cls = stage && i < stage.index ? 'done' : stage && i === stage.index ? 'now' : '';
+    return `<span class="method-chip ${cls}">${esc(st.title)}</span>`;
+  }).join('');
+}
+
+function startMethod(method: CookMethod): void {
+  activeMethod = { method, startedAt: Date.now() };
+  renderMethodBanner();
+  // Follow the method's grill temperature where it names one — the procedure is
+  // the point, and running 3-2-1 at the wrong temperature is not running it.
+  if (typeof method.grillTemp === 'number') {
+    setTempValue = clampTemp(method.grillTemp);
+    userEditSetpoint();
+    void run(`Grill → ${method.grillTemp}${unit()}`, window.pitboss.setTemp(method.grillTemp));
+  }
+  toast(`Following ${method.name}`);
+}
+
+function endMethod(): void {
+  activeMethod = null;
+  renderMethodBanner();
+}
+
+// ---- cut picker ------------------------------------------------------------
+// Two screens on purpose. Browsing shows every cut; once one is chosen the view
+// shows that cut and nothing else. Leaving the other meats' doneness levels on
+// screen after a choice is what made the iOS version confusing, and the fix is
+// the same here: the second screen is about one cut.
+let cutProbe = 1;              // which probe the picker is setting
+let cutSelected: MeatCut | null = null;
+
+function openCutPicker(probe: number): void {
+  if (!cooking) return toast('Cooking data unavailable', true);
+  cutProbe = probe;
+  cutSelected = null;
+  ($('cutSearch') as HTMLInputElement).value = '';
+  showCutBrowse();
+  $('cutOverlay').classList.remove('hidden');
+  ($('cutSearch') as HTMLInputElement).focus();
+}
+
+function closeCutPicker(): void { $('cutOverlay').classList.add('hidden'); }
+
+function showCutBrowse(): void {
+  cutSelected = null;
+  $('cutBrowse').classList.remove('hidden');
+  $('cutDetail').classList.add('hidden');
+  $('cutBack').classList.add('hidden');
+  $('cutTitle').textContent = `What's on ${probeLabel(cutProbe)}?`;
+  renderCutList();
+}
+
+function renderCutList(): void {
+  if (!cooking) return;
+  const q = ($('cutSearch') as HTMLInputElement).value;
+  const matches = PBCooking.searchCuts(cooking, q);
+  const list = $('cutList');
+  if (matches.length === 0) {
+    list.innerHTML = '<div class="cut-empty">No cuts match that.</div>';
+    return;
+  }
+  let html = '';
+  let idx = 0;   // stable ids so the screenshot driver can open a cut
+  for (const cat of PBCooking.CATEGORY_ORDER) {
+    const inCat = matches.filter((c) => c.category === cat);
+    if (inCat.length === 0) continue;
+    html += `<div class="cut-cat">${esc(PBCooking.CATEGORY_LABELS[cat])}</div>`;
+    for (const cut of inCat) {
+      const sug = PBCooking.suggestedTarget(cut);
+      html += `<button class="cut-item" id="cutItem${idx++}" data-cut="${esc(cut.name)}">`
+        + `<span class="cut-item-name">${esc(cut.name)}</span>`
+        + `<span class="cut-item-temp">${sug ? `${sug.temperature}°` : ''}</span></button>`;
+    }
+  }
+  list.innerHTML = html;
+  list.querySelectorAll<HTMLButtonElement>('button[data-cut]').forEach((b) => {
+    b.addEventListener('click', () => {
+      const cut = cutByName(b.dataset.cut!);
+      if (cut) showCutDetail(cut);
+    });
+  });
+}
+
+function showCutDetail(cut: MeatCut): void {
+  if (!cooking) return;
+  cutSelected = cut;
+  $('cutBrowse').classList.add('hidden');
+  $('cutDetail').classList.remove('hidden');
+  $('cutBack').classList.remove('hidden');
+  $('cutTitle').textContent = cut.name;
+  $('cutNote').textContent = cut.note ?? '';
+  $('cutNote').classList.toggle('hidden', !cut.note);
+
+  // Targets for this cut only, each labelled with what kind of number it is.
+  // A safety floor and a texture temperature are not the same claim, and
+  // showing them identically is how someone talks themselves out of the floor.
+  const floor = PBCooking.safeFloor(cut, cooking);
+  const suggested = PBCooking.suggestedTarget(cut);
+  $('cutTargets').innerHTML = cut.targets.map((t) => {
+    const below = PBCooking.isBelowSafeMinimum(t, cut, cooking!);
+    const kindLabel = t.kind === 'safeMinimum' ? 'safe minimum'
+      : t.kind === 'texture' ? 'texture' : 'doneness';
+    return `<button class="cut-target${t === suggested ? ' suggested' : ''}${below ? ' below' : ''}"`
+      + ` data-temp="${t.temperature}">`
+      + `<span class="ct-temp">${t.temperature}°</span>`
+      + `<span class="ct-label">${esc(t.label)}</span>`
+      + `<span class="ct-kind">${kindLabel}${below ? ' · under the floor' : ''}</span>`
+      + `</button>`;
+  }).join('');
+  $('cutTargets').querySelectorAll<HTMLButtonElement>('button[data-temp]').forEach((b) => {
+    b.addEventListener('click', () => applyCutTarget(cut, Number(b.dataset.temp)));
+  });
+
+  const warn = $('cutFloorWarn');
+  if (floor !== null) {
+    warn.textContent = `USDA safe minimum for this is ${floor}°.`;
+    warn.classList.remove('hidden');
+  } else {
+    warn.classList.add('hidden');
+  }
+
+  // Methods for this cut.
+  const hasMethods = cut.methods.length > 0;
+  $('cutMethodsWrap').classList.toggle('hidden', !hasMethods);
+  if (hasMethods) {
+    $('cutMethods').innerHTML = cut.methods.map((m) => {
+      const dur = PBCooking.methodDurationLabel(m);
+      return `<button class="cut-method" data-method="${esc(m.name)}">`
+        + `<span class="cm-name">${esc(m.name)}${dur ? ` · ${dur}` : ''}</span>`
+        + `<span class="cm-sum">${esc(m.summary)}</span></button>`;
+    }).join('');
+    $('cutMethods').querySelectorAll<HTMLButtonElement>('button[data-method]').forEach((b) => {
+      b.addEventListener('click', () => {
+        const m = cut.methods.find((x) => x.name === b.dataset.method);
+        if (m) { startMethod(m); closeCutPicker(); }
+      });
+    });
+  }
+
+  // The cook preset: this cut's conventional grill temperature.
+  const gt = cut.grillTemp;
+  $('cutGrillWrap').classList.toggle('hidden', gt === undefined);
+  if (gt !== undefined) $('cutGrillText').textContent = `Usually cooked at ${gt}°`;
+}
+
+function applyCutTarget(cut: MeatCut, temp: number): void {
+  probeCuts[cutProbe] = cut.name;
+  probeTargets[cutProbe] = temp;
+  persist({ probeTargets });
+  const input = document.getElementById(`p${cutProbe}Target`) as HTMLInputElement | null;
+  if (input) input.value = String(temp);
+  renderState();
+  void run(`${probeLabel(cutProbe)} → ${temp}${unit()}`, window.pitboss.setProbe(cutProbe, temp));
+  closeCutPicker();
+}
+
+function wireCutPicker(): void {
+  $('cutClose').addEventListener('click', closeCutPicker);
+  $('cutBack').addEventListener('click', showCutBrowse);
+  $('cutOverlay').addEventListener('click', (e) => {
+    if (e.target === $('cutOverlay')) closeCutPicker();
+  });
+  ($('cutSearch') as HTMLInputElement).addEventListener('input', renderCutList);
+  $('cutCustomSet').addEventListener('click', () => {
+    const v = Number(($('cutCustom') as HTMLInputElement).value);
+    if (!Number.isFinite(v) || v <= 0) return toast('Enter a target temperature', true);
+    if (cutSelected) applyCutTarget(cutSelected, v);
+  });
+  $('cutGrillSet').addEventListener('click', () => {
+    const gt = cutSelected?.grillTemp;
+    if (gt === undefined) return;
+    setTempValue = clampTemp(gt);
+    userEditSetpoint();
+    void run(`Grill → ${gt}${unit()}`, window.pitboss.setTemp(gt));
+  });
+  $('methodEnd').addEventListener('click', endMethod);
+}
+
+// ---- theme -----------------------------------------------------------------
+// The OS preference is the default and an explicit choice overrides it, in both
+// directions — the toggle stamps data-theme on the root, which beats the
+// prefers-color-scheme rule in styles.css. Persisted, so the choice survives a
+// restart; 'auto' removes the attribute rather than recording a guess at what
+// the OS currently says.
+type Theme = 'auto' | 'light' | 'dark';
+let theme: Theme = 'auto';
+
+function applyTheme(): void {
+  const root = document.documentElement;
+  if (theme === 'auto') root.removeAttribute('data-theme');
+  else root.setAttribute('data-theme', theme);
+  const btn = document.getElementById('themeBtn');
+  if (btn) btn.textContent = `Theme: ${theme[0].toUpperCase()}${theme.slice(1)}`;
+}
+
+function cycleTheme(): void {
+  theme = theme === 'auto' ? 'light' : theme === 'light' ? 'dark' : 'auto';
+  applyTheme();
+  clearTokenCache();
+  persist({ theme });
+  // The charts are drawn to a canvas, so they don't re-style themselves.
+  renderChart();
+}
+
+// ---- canvas theming --------------------------------------------------------
+// The charts are drawn to a canvas, so they can't inherit CSS. Reading the same
+// custom properties keeps them inside the token layer rather than carrying a
+// second, hardcoded palette that only looks right in one theme. Cached per
+// draw pass and cleared on a theme change, since getComputedStyle is not free.
+let tokenCache: Record<string, string> = {};
+function token(name: string): string {
+  if (tokenCache[name]) return tokenCache[name];
+  const v = getComputedStyle(document.documentElement).getPropertyValue(`--${name}`).trim();
+  tokenCache[name] = v || '#888';
+  return tokenCache[name];
+}
+function clearTokenCache(): void { tokenCache = {}; }
 
 // Escape user text before it goes into an innerHTML attribute value.
 function esc(s: string): string {
@@ -189,6 +518,10 @@ let augerSeen = false, fanSeen = false, igniterSeen = false;
 // Estimated pellet level from cumulative auger run-time. Defaults are rough and
 // tunable in settings.json; the user recalibrates by tapping "Refilled".
 const pellets: PelletState = { capacityLbs: 20, feedRateLbsPerHr: 8, augerSeconds: 0, refilledAt: 0 };
+// True once a replayed cook is driving the UI (PITBOSS_REPLAY). Replay exists
+// for screenshots and demos, so it must stay read-only with respect to the
+// user's real pellet and settings state.
+let isReplay = false;
 let lastAugerTickT = 0;      // for integrating auger-on time between state events
 let lastPelletSaveT = 0;     // throttle persistence of augerSeconds
 
@@ -415,6 +748,7 @@ function renderCaps(): void {
             <input class="probe-label" id="p${i}Label" placeholder="Probe ${i}"
                    maxlength="24" value="${esc(probeLabels[i] ?? '')}" />
             <span class="probe-sub" id="p${i}Sub">Not connected</span>
+            <span class="probe-eta" id="p${i}Eta"></span>
           </span>
         </span>
         <span class="probe-temp" id="p${i}Temp">--<span class="pu">${unit()}</span></span>
@@ -423,6 +757,7 @@ function renderCaps(): void {
           <input type="number" id="p${i}Target" class="probe-input" placeholder="target"
                  value="${probeTargets[i] ?? ''}" />
           <button class="probe-set" data-probe="${i}">Set</button>
+          <button class="probe-cut" id="p${i}CutBtn" data-cut-probe="${i}" title="Pick what's on this probe">Cut…</button>
           <button class="probe-clear" data-clear="${i}" title="Clear target" aria-label="Clear target">✕</button>
         </span>` : `<span class="probe-monitor">monitor</span>`}
       </div>
@@ -431,6 +766,9 @@ function renderCaps(): void {
   }
   panels.querySelectorAll<HTMLButtonElement>('button[data-probe]').forEach((b) => {
     b.addEventListener('click', () => setProbeTarget(Number(b.dataset.probe)));
+  });
+  panels.querySelectorAll<HTMLButtonElement>('button[data-cut-probe]').forEach((b) => {
+    b.addEventListener('click', () => openCutPicker(Number(b.dataset.cutProbe)));
   });
   panels.querySelectorAll<HTMLButtonElement>('button[data-clear]').forEach((b) => {
     b.addEventListener('click', () => clearProbeTarget(Number(b.dataset.clear)));
@@ -485,17 +823,17 @@ function led(id: string, on: boolean, hot = false): void {
 }
 
 // ---- temperature chart -----------------------------------------------------
-interface ChartSeries { key: keyof Sample; color: string; dash?: number[]; }
+interface ChartSeries { key: keyof Sample; colorToken: string; dash?: number[]; }
 interface ChartGroup { id: string; label: string; readKey: keyof Sample; series: ChartSeries[]; }
 // One chart per source: the grill (with its dashed setpoint) and each probe.
 const CHART_GROUPS: ChartGroup[] = [
   { id: 'grill', label: 'Grill', readKey: 'grillTemp', series: [
-      { key: 'grillTemp', color: '#ff6b1a' },
-      { key: 'grillSetTemp', color: '#ffcf4d', dash: [4, 4] } ] },
-  { id: 'p1', label: 'Probe 1', readKey: 'p1Temp', series: [{ key: 'p1Temp', color: '#5aa9e6' }] },
-  { id: 'p2', label: 'Probe 2', readKey: 'p2Temp', series: [{ key: 'p2Temp', color: '#4ccf6a' }] },
-  { id: 'p3', label: 'Probe 3', readKey: 'p3Temp', series: [{ key: 'p3Temp', color: '#c98be0' }] },
-  { id: 'p4', label: 'Probe 4', readKey: 'p4Temp', series: [{ key: 'p4Temp', color: '#e88f5a' }] },
+      { key: 'grillTemp', colorToken: 'flame' },
+      { key: 'grillSetTemp', colorToken: 'warn', dash: [4, 4] } ] },
+  { id: 'p1', label: 'Probe 1', readKey: 'p1Temp', series: [{ key: 'p1Temp', colorToken: 'blue' }] },
+  { id: 'p2', label: 'Probe 2', readKey: 'p2Temp', series: [{ key: 'p2Temp', colorToken: 'ok' }] },
+  { id: 'p3', label: 'Probe 3', readKey: 'p3Temp', series: [{ key: 'p3Temp', colorToken: 'probe3' }] },
+  { id: 'p4', label: 'Probe 4', readKey: 'p4Temp', series: [{ key: 'p4Temp', colorToken: 'probe4' }] },
 ];
 
 const activeSamples = () => (viewCookId ? viewSamples : liveSamples);
@@ -594,7 +932,7 @@ function drawSeriesChart(canvas: HTMLCanvasElement, series: ChartSeries[], sampl
     if (v > vMax) vMax = v;
   }
   if (!isFinite(vMin)) {
-    ctx.fillStyle = '#8a7660';
+    ctx.fillStyle = token('muted');
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('No data yet', cssW / 2, cssH / 2);
@@ -617,8 +955,8 @@ function drawSeriesChart(canvas: HTMLCanvasElement, series: ChartSeries[], sampl
   const y = (v: number) => padT + (1 - (v - vMin) / (vMax - vMin)) * plotH;
 
   // Horizontal gridlines + y-axis labels (few, since each chart is short).
-  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
-  ctx.fillStyle = '#a8927c';
+  ctx.strokeStyle = token('grid');
+  ctx.fillStyle = token('muted');
   ctx.textBaseline = 'middle';
   const ticks = 2;
   for (let i = 0; i <= ticks; i++) {
@@ -632,7 +970,7 @@ function drawSeriesChart(canvas: HTMLCanvasElement, series: ChartSeries[], sampl
   ctx.lineWidth = 1.5;
   for (const ser of series) {
     ctx.beginPath();
-    ctx.strokeStyle = ser.color;
+    ctx.strokeStyle = token(ser.colorToken);
     ctx.setLineDash(ser.dash || []);
     let started = false;
     for (const s of samples) {
@@ -646,7 +984,7 @@ function drawSeriesChart(canvas: HTMLCanvasElement, series: ChartSeries[], sampl
   ctx.setLineDash([]);
 
   // X-axis: start and end clock times.
-  ctx.fillStyle = '#a8927c';
+  ctx.fillStyle = token('muted');
   ctx.textBaseline = 'bottom';
   ctx.fillText(clock(tMin), padL, cssH);
   const end = clock(tMax);
@@ -655,11 +993,11 @@ function drawSeriesChart(canvas: HTMLCanvasElement, series: ChartSeries[], sampl
 
 // Component-activity timeline: on/off bands for the auger, fan and igniter over
 // the same time axis as the temp charts.
-interface ActivityRow { key: keyof Sample; label: string; color: string; }
+interface ActivityRow { key: keyof Sample; label: string; colorToken: string; }
 const ACTIVITY_ROWS: ActivityRow[] = [
-  { key: 'auger', label: 'Auger', color: '#ff6b1a' },
-  { key: 'fan', label: 'Fan', color: '#5aa9e6' },
-  { key: 'igniter', label: 'Ign', color: '#ffcf4d' },
+  { key: 'auger', label: 'Auger', colorToken: 'flame' },
+  { key: 'fan', label: 'Fan', colorToken: 'blue' },
+  { key: 'igniter', label: 'Ign', colorToken: 'warn' },
 ];
 
 function drawActivityChart(canvas: HTMLCanvasElement, samples: Sample[]): void {
@@ -677,7 +1015,7 @@ function drawActivityChart(canvas: HTMLCanvasElement, samples: Sample[]): void {
   // Only rows the samples actually carry (older cooks lack these fields).
   const rows = ACTIVITY_ROWS.filter((r) => samples.some((s) => s[r.key] !== undefined));
   if (!rows.length) {
-    ctx.fillStyle = '#8a7660';
+    ctx.fillStyle = token('muted');
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText('No activity data yet', cssW / 2, cssH / 2);
     ctx.textAlign = 'left';
@@ -695,13 +1033,13 @@ function drawActivityChart(canvas: HTMLCanvasElement, samples: Sample[]): void {
 
   rows.forEach((r, idx) => {
     const yTop = padT + idx * rowH + (rowH - bandH) / 2;
-    ctx.fillStyle = '#a8927c';
+    ctx.fillStyle = token('muted');
     ctx.textBaseline = 'middle';
     ctx.fillText(r.label, 4, yTop + bandH / 2);
     // Faint baseline track, then filled segments where the component was on.
-    ctx.fillStyle = 'rgba(255,255,255,0.05)';
+    ctx.fillStyle = token('grid');
     ctx.fillRect(padL, yTop, plotW, bandH);
-    ctx.fillStyle = r.color;
+    ctx.fillStyle = token(r.colorToken);
     for (let i = 0; i < samples.length; i++) {
       if (!samples[i][r.key]) continue;
       const x0 = x(samples[i].t);
@@ -710,7 +1048,7 @@ function drawActivityChart(canvas: HTMLCanvasElement, samples: Sample[]): void {
     }
   });
 
-  ctx.fillStyle = '#a8927c';
+  ctx.fillStyle = token('muted');
   ctx.textBaseline = 'bottom';
   ctx.fillText(clock(tMin), padL, cssH);
   const end = clock(tMax);
@@ -946,7 +1284,33 @@ function renderState(): void {
     const sub = document.getElementById(`p${i}Sub`);
     if (dot) dot.className = 'probe-dot ' + cls;
     if (sub) { sub.textContent = text; sub.classList.toggle('over-sub', over); }
+
+    // The estimate, or the reason there isn't one. Never left blank while a
+    // target is set: "estimate in ~25m" and "stalled 40m — normal" are both
+    // more use than an empty line, and a silent gap reads as a broken feature.
+    const eta = document.getElementById(`p${i}Eta`);
+    if (eta) {
+      const cut = probeCuts[i];
+      if (v == null || target == null) {
+        eta.textContent = cut ? cut : '';
+        eta.className = 'probe-eta';
+      } else {
+        const verdict = probeVerdict(i);
+        const label = PBEstimate.estimateLabel(verdict);
+        const why = PBEstimate.explanation(verdict);
+        const done = PBEstimate.finishTime(verdict);
+        const parts: string[] = [];
+        if (cut) parts.push(cut);
+        if (label) parts.push(`${label} left${done ? ` · ready ${clock(done)}` : ''}`);
+        else if (why) parts.push(why);
+        if (label && why) parts.push(why);
+        eta.textContent = parts.join(' · ');
+        eta.className = 'probe-eta' + (verdict.kind === 'stalled' ? ' stalled' : '');
+      }
+    }
   }
+
+  renderMethodBanner();
 
   led('ledFan', !!state.fanState);
   led('ledHot', !!state.hotState, true);
@@ -1090,6 +1454,7 @@ function handleEvent(evt: SidecarEvent): void {
       connected = evt.connected;
       connecting = evt.connecting;
       if (evt.device) state.__device = evt.device;
+      if (evt.device === 'REPLAY') isReplay = true;
       // On a fresh connection, adopt the grill's own setpoint (arrives with the
       // next state frame) rather than a stale remembered value.
       if (connected && !was) userSetTarget = false;
@@ -1126,12 +1491,17 @@ function handleEvent(evt: SidecarEvent): void {
       if (state.hotState) igniterSeen = true;
 
       // Integrate auger run-time for the pellet estimate; persist periodically.
+      // Skipped under replay: a recorded cook played back at 400x would burn
+      // through the hopper estimate in seconds and write that to the real
+      // settings file. A screenshot run must not change the user's data.
       const nowT = Date.now();
-      if (lastAugerTickT && state.motorState) {
-        pellets.augerSeconds += Math.min(nowT - lastAugerTickT, 10_000) / 1000;
+      if (!isReplay) {
+        if (lastAugerTickT && state.motorState) {
+          pellets.augerSeconds += Math.min(nowT - lastAugerTickT, 10_000) / 1000;
+        }
+        if (nowT - lastPelletSaveT > 15_000) { lastPelletSaveT = nowT; persist({ pellets }); }
       }
       lastAugerTickT = nowT;
-      if (nowT - lastPelletSaveT > 15_000) { lastPelletSaveT = nowT; persist({ pellets }); }
       // A fresh power-on starts a new cook — clear the live curve so cooks
       // don't visually run together within one app session, and start the
       // session clock. Power-off ends the session.
@@ -1536,9 +1906,24 @@ async function boot(): Promise<void> {
     if (s.detectionSensitivity) detectionSensitivity = s.detectionSensitivity;
     if (s.maintenanceThresholds) Object.assign(maintenanceThresholds, s.maintenanceThresholds);
     if (s.shutdownConfig) Object.assign(shutdownConfig, s.shutdownConfig);
+    if (s.theme) theme = s.theme;
     if (s.grillName) grillName = s.grillName;
     if (s.grillModel) grillModel = s.grillModel;
   } catch { /* defaults are fine */ }
+
+  // The cooking knowledge base — cuts, targets and methods. A failure here
+  // disables the cut picker and leaves everything else working, rather than
+  // taking the controller down with it.
+  try {
+    cooking = await window.pitboss.getCooking();
+  } catch {
+    cooking = null;
+  }
+  if (!cooking) console.warn('[pitboss] cooking data unavailable — the cut picker is disabled');
+  wireCutPicker();
+
+  applyTheme();
+  $('themeBtn').addEventListener('click', cycleTheme);
 
   renderSetpoint();
   renderConnection();
@@ -1552,6 +1937,15 @@ async function boot(): Promise<void> {
   window.setInterval(() => renderConnection(), 3000);
   // Tick the session clock every second so elapsed time stays live.
   window.setInterval(renderSessionTime, 1000);
+  // Cook events change the estimate (an outage costs about an hour the measured
+  // rate can't see), but they're rare — poll slowly rather than on every state.
+  const pollEvents = async () => {
+    try { cookEvents = await window.pitboss.getCookEvents(); } catch { /* keep last */ }
+  };
+  void pollEvents();
+  window.setInterval(() => { void pollEvents(); }, 60_000);
+  // The method banner counts down between state events, so tick it too.
+  window.setInterval(renderMethodBanner, 30_000);
 
   // First run (no grill chosen yet) → the discovery wizard instead of auto-
   // connecting to a hardcoded default. Once configured, auto-connect on launch —

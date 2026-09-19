@@ -107,6 +107,7 @@ export interface Settings {
   cookNames?: Record<string, string>;      // optional user name/note per cook id
   grillName: string;
   grillModel: string;
+  theme?: 'auto' | 'light' | 'dark';   // 'auto' follows the OS; a choice overrides it
   grillConfigured?: boolean;   // true once the user has picked their grill (gates the wizard)
   windowBounds?: { x?: number; y?: number; width: number; height: number };
   pellets?: PelletState;
@@ -179,6 +180,40 @@ export const IPC = {
   cleaned: 'pitboss:cleaned',      // renderer -> main: reset maintenance counters
   getLoginItem: 'pitboss:login:get',
   setLoginItem: 'pitboss:login:set',
+  cooking: 'pitboss:cooking',       // the shared cuts/methods catalogue (read once)
+  cookEvents: 'pitboss:cooks:events',  // interruption events for the active cook
 } as const;
 
 export type ShutdownMode = 'auto' | 'now' | 'cancel';
+
+// A cook event — something that happened to the cook rather than a reading.
+//
+// Written to the same JSONL file as the samples, but keyed by `at` rather than
+// `t` precisely so the sample reader ignores them: any line with a numeric `t`
+// is a sample, so an event that used `t` would be read back as a reading of
+// nothing. iOS writes the identical shape (ios/.../CookStore.swift) — the two
+// apps read each other's cook files.
+export type CookEventKind =
+  | 'grill-off' | 'grill-on' | 'out-of-pellets'
+  | 'link-lost' | 'link-restored' | 'app-resumed' | 'method-started';
+
+export interface CookEvent {
+  at: number;          // epoch ms
+  kind: CookEventKind;
+  note?: string;
+}
+
+export const COOK_EVENT_LABELS: Record<CookEventKind, string> = {
+  'grill-off': 'Grill off',
+  'grill-on': 'Grill relit',
+  'out-of-pellets': 'Out of pellets',
+  'link-lost': 'Lost connection',
+  'link-restored': 'Reconnected',
+  'app-resumed': 'App resumed',
+  'method-started': 'Method started',
+};
+
+// Whether this interrupted the cook itself rather than just the record.
+export function interruptedTheCook(kind: CookEventKind): boolean {
+  return kind === 'grill-off' || kind === 'out-of-pellets';
+}

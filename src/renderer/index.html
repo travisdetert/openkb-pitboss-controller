@@ -37,6 +37,7 @@
     <button id="refreshBtn" class="btn btn-ghost">Refresh</button>
     <button id="newSessionBtn" class="btn btn-ghost">New Session</button>
     <button id="sessionsBtn" class="btn btn-ghost">Sessions</button>
+    <button id="themeBtn" class="btn btn-ghost" title="Theme: follow the system, or force light/dark">Theme: Auto</button>
     <button id="settingsBtn" class="btn btn-ghost">Settings</button>
   </div>
 
@@ -67,6 +68,10 @@
            · cookSummary  — a header for a selected past cook (date, duration, peak…)
            · cookStats    — recent-cook stats before first contact (waiting screen)
            The chart + activity (chartWrap) show for both live and past-cook views. -->
+      <!-- Readout side. Grouped so the wide layout can be a simple two-column
+           grid rather than per-child row placement, which does not survive the
+           hidden-by-mode children above. -->
+      <div class="grill-main">
       <div id="liveControls">
         <div class="bigtemp">
           <span id="grillTemp" class="bigtemp-value">--</span>
@@ -82,6 +87,37 @@
       <div id="cookSummary" class="cook-summary hidden">
         <div class="cook-summary-title" id="cookSummaryTitle"></div>
         <div class="cook-summary-stats" id="cookSummaryStats"></div>
+      </div>
+      <!-- Active cooking method: which stage you're on and what it asks for.
+           Hidden until a method is started from the cut picker. -->
+      <div id="methodBanner" class="method-banner hidden">
+        <div class="method-head">
+          <span class="method-name" id="methodName"></span>
+          <button id="methodEnd" class="pellet-btn" title="Stop following this method">End</button>
+        </div>
+        <div class="method-stage" id="methodStage"></div>
+        <div class="method-detail" id="methodDetail"></div>
+        <div class="method-steps" id="methodSteps"></div>
+      </div>
+
+      <div class="pellet-gauge">
+        <div class="pellet-head">
+          <span class="pellet-label">Pellets <span class="pellet-note">est.</span></span>
+          <span class="pellet-btns">
+            <button id="refillBtn" class="pellet-btn" title="Tap after filling the hopper — resets the estimate to full">Refilled</button>
+            <button id="emptiedBtn" class="pellet-btn" title="Tap after emptying the hopper — best practice to store pellets dry between cooks">Emptied</button>
+          </span>
+        </div>
+        <div class="pellet-bar"><div class="pellet-fill ok" id="pelletFill"></div></div>
+        <div class="pellet-sub" id="pelletSub">~-- %</div>
+      </div>
+      <div class="maint" id="maint">
+        <div class="maint-head">
+          <span class="maint-label">Maintenance</span>
+          <button id="cleanedBtn" class="pellet-btn" title="Reset after cleaning the grill — drip tray, grease bucket, firepot">Cleaned</button>
+        </div>
+        <div class="maint-sub" id="maintSub">No usage recorded yet</div>
+      </div>
       </div>
 
       <div id="chartWrap">
@@ -100,31 +136,58 @@
         <div class="cook-stats-empty hidden" id="cookStatsEmpty">No cooks recorded yet</div>
       </div>
 
-      <div class="pellet-gauge">
-        <div class="pellet-head">
-          <span class="pellet-label">Pellets <span class="pellet-note">est.</span></span>
-          <span class="pellet-btns">
-            <button id="refillBtn" class="pellet-btn" title="Tap after filling the hopper — resets the estimate to full">Refilled</button>
-            <button id="emptiedBtn" class="pellet-btn" title="Tap after emptying the hopper — best practice to store pellets dry between cooks">Emptied</button>
-          </span>
-        </div>
-        <div class="pellet-bar"><div class="pellet-fill ok" id="pelletFill"></div></div>
-        <div class="pellet-sub" id="pelletSub">~-- %</div>
-      </div>
 
-      <div class="maint" id="maint">
-        <div class="maint-head">
-          <span class="maint-label">Maintenance</span>
-          <button id="cleanedBtn" class="pellet-btn" title="Reset after cleaning the grill — drip tray, grease bucket, firepot">Cleaned</button>
-        </div>
-        <div class="maint-sub" id="maintSub">No usage recorded yet</div>
-      </div>
+
+
     </section>
 
     <!-- One panel per probe (status + controls + its own chart), built by JS -->
     <div id="probePanels"></div>
 
   </main>
+
+  <!-- Cut picker: choose what's on the probe, and get its target temperature,
+       its safe floor and any named method for it. Two screens on purpose —
+       once a cut is chosen, only that cut's options are shown. Offering other
+       meats' doneness levels next to the chosen cut is how the iOS version
+       first got this wrong. -->
+  <div id="cutOverlay" class="modal-overlay hidden">
+    <div class="modal cut-modal" role="dialog" aria-modal="true" aria-label="Choose a cut">
+      <div class="modal-head">
+        <button id="cutBack" class="modal-x hidden" aria-label="Back">←</button>
+        <span class="modal-title" id="cutTitle">What's on the probe?</span>
+        <button id="cutClose" class="modal-x" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <!-- Screen A: browse / search -->
+        <div id="cutBrowse">
+          <input id="cutSearch" class="cut-search" type="search" placeholder="Search cuts…"
+                 autocomplete="off" />
+          <div id="cutList" class="cut-list"></div>
+        </div>
+        <!-- Screen B: the chosen cut, and nothing else -->
+        <div id="cutDetail" class="hidden">
+          <div class="cut-note" id="cutNote"></div>
+          <div class="cut-section-title">Target</div>
+          <div id="cutTargets" class="cut-targets"></div>
+          <div class="cut-custom">
+            <label for="cutCustom">Or set your own</label>
+            <input type="number" id="cutCustom" class="probe-input" placeholder="°" />
+            <button id="cutCustomSet" class="probe-set">Use</button>
+          </div>
+          <div id="cutFloorWarn" class="cut-floor hidden"></div>
+          <div id="cutMethodsWrap" class="hidden">
+            <div class="cut-section-title">Method</div>
+            <div id="cutMethods" class="cut-methods"></div>
+          </div>
+          <div id="cutGrillWrap" class="cut-grill hidden">
+            <span id="cutGrillText"></span>
+            <button id="cutGrillSet" class="probe-set">Set grill</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <div id="toast" class="toast hidden"></div>
 
@@ -230,6 +293,11 @@
     </div>
   </div>
 
+  <!-- Shared logic, wrapped from src/shared/ at build time so the renderer and
+       the main process run the same estimator rather than two copies of it
+       (scripts/copy-assets.js, ADR 0007). Must load before renderer.js. -->
+  <script src="./PBCooking.js"></script>
+  <script src="./PBEstimate.js"></script>
   <script src="./renderer.js"></script>
 </body>
 </html>

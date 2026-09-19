@@ -10,6 +10,82 @@ import { advanceShutdown, beginShutdown, SHUTDOWN, ShutdownPhase } from './shutd
 import { maintenanceDue, maintenanceReasons } from './maintenance';
 import { resolveConfig } from './config';
 import { GrillCommand, GrillState, IPC, NoticeLevel, Settings, ShutdownMode, SidecarEvent } from '../shared/protocol';
+import { CookingData, parseCooking } from '../shared/cooking';
+
+// ---- replay (dev) -----------------------------------------------------------
+// PITBOSS_REPLAY=<cook id|path> feeds a recorded cook back through the normal
+// event path, so the UI can be driven — and screenshotted — with no grill
+// attached. The desktop sibling of the iOS Replay (ios/.../Replay.swift), and
+// the reason a populated screenshot of this app is reproducible at all: without
+// it the only capture possible is the empty "waiting for grill" screen.
+//
+// It emits the same `capabilities` and `state` events the sidecar would, and
+// never writes to the recorder, so a replay cannot pollute the cook history.
+// PITBOSS_REPLAY_RATE is samples per second (default 60 = one hour per minute).
+function startReplay(wc: Electron.WebContents): void {
+  const spec = process.env.PITBOSS_REPLAY;
+  if (!spec) return;
+  const file = spec.endsWith('.jsonl')
+    ? spec
+    : path.join(app.getPath('userData'), 'cooks', `${spec}.jsonl`);
+  let samples: Record<string, unknown>[];
+  try {
+    samples = fs.readFileSync(file, 'utf8').split('\n')
+      .filter((l) => l.trim())
+      .map((l) => { try { return JSON.parse(l); } catch { return null; } })
+      .filter((o): o is Record<string, unknown> => !!o && typeof o.t === 'number');
+  } catch (e) {
+    log('replay failed to read', file, (e as Error).message);
+    return;
+  }
+  if (samples.length === 0) { log('replay: no samples in', file); return; }
+  log(`replay: ${samples.length} samples from ${path.basename(file)}`);
+
+  const caps = {
+    type: 'capabilities', model: 'PB1100PSC3', min_temp: 180, max_temp: 500,
+    temp_increments: [180, 200, 225, 250, 275, 300, 325, 350, 375, 400, 425, 450, 475, 500],
+    meat_probes: 4, has_lights: false,
+  };
+  wc.send(IPC.event, caps);
+  wc.send(IPC.event, { type: 'status', connected: true, connecting: false, reason: 'replay', device: 'REPLAY' });
+
+  const rate = Number(process.env.PITBOSS_REPLAY_RATE) || 60;
+  let i = 0;
+  const tick = setInterval(() => {
+    if (i >= samples.length) { clearInterval(tick); return; }
+    const s = samples[i++];
+    wc.send(IPC.event, {
+      type: 'state',
+      data: {
+        moduleIsOn: true,
+        grillTemp: s.grillTemp, grillSetTemp: s.grillSetTemp,
+        p1Temp: s.p1Temp, p2Temp: s.p2Temp, p3Temp: s.p3Temp, p4Temp: s.p4Temp,
+        fanState: !!s.fan, motorState: !!s.auger, hotState: !!s.igniter,
+        isFahrenheit: true, __device: 'REPLAY',
+      },
+    });
+  }, Math.max(8, 1000 / rate));
+  wc.on('destroyed', () => clearInterval(tick));
+}
+
+// ---- cooking knowledge base -------------------------------------------------
+// data/cooking.json is copied into dist/data/ at build time (scripts/copy-assets.js)
+// so it ships inside the asar. Loaded lazily and cached: it is static data, and
+// the renderer has no filesystem access of its own (contextIsolation). One file
+// is the source of truth for both apps — see ADR 0007.
+let cookingCache: CookingData | null = null;
+function loadCooking(): CookingData | null {
+  if (cookingCache) return cookingCache;
+  try {
+    const file = path.join(__dirname, '..', 'data', 'cooking.json');
+    cookingCache = parseCooking(JSON.parse(fs.readFileSync(file, 'utf8')));
+    log(`cooking data loaded: ${cookingCache.cuts.length} cuts, ${cookingCache.methods.length} methods`);
+    return cookingCache;
+  } catch (e) {
+    log('cooking data unavailable:', (e as Error).message);
+    return null;
+  }
+}
 
 // Project root = two levels up from dist/main/.
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
@@ -144,6 +220,7 @@ function createWindow(): void {
   // rebuilds its controls and readouts even if it missed the one-shot events.
   win.webContents.on('did-finish-load', () => {
     if (win) replayTo(win.webContents);
+    if (win) startReplay(win.webContents);
   });
 
   // Dev affordance: PITBOSS_SHOT=<path> dumps a PNG of the rendered UI once
@@ -157,6 +234,18 @@ function createWindow(): void {
   if (shot) {
     const capture = async () => {
       try {
+        // Optionally open a panel first, so a shot can show a modal (the cut
+        // picker, settings) and not just the dashboard. Deliberately a click on
+        // an element id rather than an eval hook: it can only press something
+        // the UI already has, which keeps the screenshot driver from turning
+        // into a general "run this in the renderer" back door.
+        const clicks = (process.env.PITBOSS_SHOT_CLICK ?? '')
+          .split(',').map((c) => c.trim()).filter((c) => /^[A-Za-z][\w-]*$/.test(c));
+        for (const id of clicks) {
+          await win!.webContents.executeJavaScript(
+            `document.getElementById(${JSON.stringify(id)})?.click()`);
+          await new Promise((r) => setTimeout(r, 600));
+        }
         const img = await win!.webContents.capturePage();
         fs.writeFileSync(shot, img.toPNG());
         log(`captured UI screenshot -> ${shot}`);
@@ -329,6 +418,11 @@ app.whenReady().then(() => {
 
   // Start-at-login is OS-owned — read/write it straight from the OS, never a
   // shadow copy in settings.json.
+  // The cooking knowledge base, read once and handed to the renderer. Parsed in
+  // main because the renderer has no filesystem access (contextIsolation), and
+  // cached because it never changes at runtime. See ADR 0007.
+  ipcMain.handle(IPC.cooking, () => loadCooking());
+  ipcMain.handle(IPC.cookEvents, () => recorder!.liveEvents());
   ipcMain.handle(IPC.getLoginItem, () => app.getLoginItemSettings().openAtLogin);
   ipcMain.handle(IPC.setLoginItem, (_e, open: boolean) => {
     app.setLoginItemSettings({ openAtLogin: !!open });
