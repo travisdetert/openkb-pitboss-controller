@@ -96,3 +96,94 @@ gets its own pass.
 
 Result: clean — no High/Critical open. The delete path is guarded and the
 destructive operation confirmed refusing traversal ids and the active cook.
+
+### 2026-09-18 — native iOS app (ADR 0006)
+The iOS port (`ios/`) adds a second implementation of the BLE protocol, so it
+gets its own pass. Scanners run from the repo root.
+
+- **New surface:**
+  - `BLETransport` (CoreBluetooth) — speaks only to a BLE peripheral whose
+    advertised name the user picked from a scan. No sockets, no HTTP, no
+    listener. The app makes **no network connections at all**; pytboss's cloud
+    login (`auth.py`, `wss.py`) was deliberately not ported.
+  - `ControlBoard` — **executes JavaScript from `grills.json` via
+    JavaScriptCore.** This is the one genuinely widened surface and is
+    **accepted**, because: the file is *vendored into the app bundle at build
+    time*, never fetched at runtime; it is byte-identical to the file the
+    desktop app already executes through pytboss/dukpy; and a bare `JSContext`
+    is a sealed interpreter — no filesystem, no network, no host objects are
+    exposed to it. The only values crossing in are an integer temperature and a
+    hex frame string; the only value crossing out is parsed as a string or a
+    numeric dictionary. A malicious `grills.json` would mean a compromised
+    build, at which point the JS is the least of the problem.
+  - `Codec` — the grill-password obfuscation. **Not cryptography and documented
+    as such** in the source; it exists because the firmware expects it. The
+    password lives only in memory on the controller, defaults to empty (which
+    skips the path entirely), and is never written to disk or into the log.
+- **Input handling:** every frame from the grill is untrusted. `DebugFrame.parse`
+  requires the exact three-part shape *and* a matching length before the payload
+  is used; the board routines reject any frame without their `FE0B`/`FE0C`
+  prefix and return null rather than throwing. RPC replies are matched by `id`
+  and dropped if unparseable. Malformed input is discarded, never guessed at.
+- **Logging:** `PitBossLog` records connection events and command names, not
+  payloads or the password. It is capped at 512 KB with rotation so a long cook
+  can't fill the device.
+- **No third-party dependencies.** `PitBossKit` links only system frameworks
+  (Foundation, CoreBluetooth, JavaScriptCore, os). There is no new supply chain.
+- **semgrep** (295 rules, 23 files incl. untracked): **0 findings**.
+- **gitleaks** (full tree, 137 MB): **no leaks**.
+- **osv-scanner**: no new findings attributable to iOS. Pre-existing and
+  **unrelated to this change**, still open in the desktop sidecar's
+  `requirements.txt`: `aiohttp` 3.14.1 (PYSEC-2026-3545 / 7.1, plus two more)
+  and `idna` 3.9.0 (PYSEC-2026-215 / 6.9). Both are pulled in by pytboss for its
+  *cloud* transport, which neither app uses; worth bumping regardless. The npm
+  findings remain dev-only (electron-builder's transitive tree).
+
+Result: clean for the new code — no High/Critical introduced. One accepted
+tradeoff (JavaScriptCore execution of vendored `grills.json`), one pre-existing
+item flagged for follow-up (`aiohttp` / `idna` bumps).
+
+### 2026-09-18 — iOS cook persistence
+Recording cooks to disk adds the first filesystem **write** surface in the iOS
+app, and a read path driven by an identifier, so it gets a note.
+
+- **New surface:** `CookStore` writes `<Application Support>/cooks/<id>.jsonl`
+  and reads it back for the history screen. The app sandbox already confines
+  this to the app's own container.
+- **Path traversal:** a cook id becomes a filename, and `readCook`/`deleteCook`/
+  `renameCook` are reachable from the UI, so **every id is validated against
+  `^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}$` before any path is built** — the same
+  guard, for the same reason, as the desktop recorder (see the 2026-07-21 entry).
+  Verified in `pitboss-verify`: `../../etc/passwd`, `..`, `""`, a colon-bearing
+  ISO timestamp and an embedded `/../` are each rejected by all three entry
+  points, not merely by the regex.
+- **Destructive operations:** deletion refuses the cook currently being written,
+  and is only reachable through an explicit swipe-to-delete. Renaming stores the
+  label in `UserDefaults` rather than rewriting the recorded file, so a rename
+  can never corrupt or truncate data.
+- **Contents:** a cook file holds timestamps, temperatures and component
+  booleans. No credentials, no location, no account data — there is no account.
+  The grill password (when set) is never written to disk or into a cook file.
+- **Format:** byte-compatible with the desktop recorder's JSONL, checked by
+  parsing a Swift-written file with the desktop's own `readCook` logic
+  (`npm run ios:interop`).
+- **semgrep** (32 files): **0 findings**. **gitleaks**: no leaks.
+
+Result: clean — no High/Critical introduced. The traversal guard is the load-
+bearing control and is covered by checks rather than by inspection alone.
+
+### 2026-09-18 — iOS notifications & background execution
+Two additions worth a note, neither of which widens the data surface.
+
+- **Local notifications** (`UserNotifications`): composed and delivered entirely
+  on-device. No push service, no token, no server — nothing leaves the phone.
+  Permission is requested at first connect and a denial degrades to in-app
+  banners only. Bodies carry temperatures and probe names; no credentials.
+- **`UIBackgroundModes: bluetooth-central`**: lets the app keep its BLE link
+  while backgrounded, which is what makes an unattended cool-down and an alert
+  on the lock screen possible. It grants no additional data access — the app
+  still talks only to the peripheral the user picked, and still makes no network
+  connections of any kind.
+- **semgrep** (50 files): 0 findings. **gitleaks**: no leaks.
+
+Result: clean — no High/Critical introduced.

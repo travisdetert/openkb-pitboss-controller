@@ -39,6 +39,33 @@ hides, on one screen. (Between cooks it shows a [recent-cook dashboard](docs/scr
 - **Lives in the OS** — tray-first, start-at-login, rich native notifications.
 - **100% local** — no cloud, no account, no telemetry.
 
+### Knowing what to cook it to
+
+Pick what is on the probe and the app supplies the target, the safety floor and
+the method — 45 cuts, seven named techniques (3-2-1, 0-400, Texas crutch,
+reverse sear …), from the same `data/cooking.json` the iOS app reads.
+
+![The cut picker: 45 cuts grouped by category, each with its suggested target temperature.](docs/screenshots/cut-picker.png)
+
+Choosing one shows that cut and nothing else — its targets labelled by *kind*
+(a USDA floor and a texture temperature are not the same claim), the floor that
+applies, its methods, and its conventional grill temperature.
+
+![The brisket detail screen: 203° slicing and 205° pulling, the 145° USDA floor, Texas crutch and hot-and-fast methods, and a set-grill shortcut.](docs/screenshots/cut-detail.png)
+
+Each probe then shows how long it has left — accounting for **the stall** and
+for pellet outages, and saying so rather than folding the padding in silently.
+When it cannot give an honest number it gives the reason instead
+(`stalled 40m — normal, it can last hours`), never a blank.
+
+### Light and dark
+
+Follows the system appearance, with a toolbar toggle that overrides it. Every
+colour — including the canvas charts — comes from the token layer, and both
+themes are checked against WCAG AA by `npm test`.
+
+![The dashboard in the light theme, with the grill curve, component activity and two probe panels.](docs/screenshots/live-dashboard-light.png)
+
 ## Why not the official app?
 
 The stock Pit Boss / Dansons app needs an account and their cloud to run a grill in
@@ -115,6 +142,9 @@ python python/test_sidecar.py    # drive the sidecar end-to-end (read-only)
 ## Docs
 
 - **Charter** — [`PROJECT.md`](PROJECT.md) (goal, definition of done, status)
+- **Cooking knowledge & estimates** — [`docs/desktop-cooking.md`](docs/desktop-cooking.md)
+  (the shared catalogue, the stall-aware estimator, themes, screenshots)
+- **iOS app** — [`ios/README.md`](ios/README.md)
 - **Security** — [`SECURITY.md`](SECURITY.md) (posture + the recorded security pass)
 - **Test plans** — [`docs/test-plan.md`](docs/test-plan.md) (comprehensive on-grill)
   · [`docs/detection-test-plan.md`](docs/detection-test-plan.md) (alert cases)
