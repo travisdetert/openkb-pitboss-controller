@@ -6,8 +6,8 @@
 -->
 # openkb-pit-boss — Charter
 
-**Status:** Done
-**Updated:** 2026-09-18
+**Status:** Usable
+**Updated:** 2026-09-19
 
 ## Goal
 A local, account-free app to control a Pit Boss pellet grill over
@@ -21,49 +21,98 @@ owner of a Pit Boss grill (built and verified against a Pro Series 1100 Combo,
 walk-away-and-get-notified control surface on the desktop.
 
 ## Definition of Done
-v1 is done when all of these are true.
+This project ships **two apps** against one grill — a macOS Electron app and a
+native iOS app (ADR 0006) — so the bar is grouped by what each item applies to.
+An item is ticked when it has been *observed working*, never when it merely
+builds.
+
+### Both apps
+- [x] One source of truth for cooking knowledge (ADR 0007, 0009): 45 cuts, 7
+  named methods and the USDA floors in `data/cooking.json`, read by both apps,
+  with a drift guard that fails `npm test` if a vendored copy diverges
+- [x] One definition of the cook-time estimator, two implementations held to the
+  same golden vectors (`data/estimate-vectors.json`) — `npm test` fails if the
+  two ever disagree
+- [x] A cook is the food, not the fire (ADR 0008): outages, relights, dropped
+  links and app restarts are written into one cook as events, not split into new
+  ones
+- [x] The two apps read each other's cook files — a phone cook opens on the
+  desktop, checked by parsing a Swift-written file with the desktop's own reader
+  (`npm run ios:interop`)
+- [x] Dark **and** light themes on both, OS-following with an in-app override,
+  every colour from the token layer — WCAG AA verified by `npm test` and
+  `npm run ios:contrast`
+- [x] Screenshots are reproducible with no grill attached (`npm run screenshots`,
+  `npm run ios:screens`)
+- [x] Notable decisions recorded — `docs/adr/` 0001 process, 0002 graceful
+  shutdown, 0003 grill discovery & model selection, 0004 local-only storage,
+  0005 frozen sidecar binary, 0006 native iOS app, 0007 sharing the cooking
+  knowledge base, 0008 a cook is the food not the fire, 0009 the cooking
+  knowledge base, 0010 resolving grill capabilities — all ten Accepted
+- [x] Data storage & backup decided: data in `userData` (not the repo), app name
+  pinned, local-only backup accepted for a grill controller (ADR 0004)
+- [x] Security passes run; findings fixed or accepted (SECURITY.md — 2026-07-19
+  first push, 2026-07-21 session manager, 2026-09-18 ×3 for the iOS app)
+- [ ] A security pass covers the BLE reconnect rework of 2026-09-19 — it changes
+  transport code, so it gates the next push
+- [ ] Known dependency CVEs cleared: `aiohttp` (PYSEC-2026-3545) and `idna`
+  (PYSEC-2026-215) in `requirements.txt`, both pulled in by pytboss
+
+### Desktop (Electron)
 - [x] Connects to the grill over BLE by stable advertised name and reads live state
 - [x] Core controls work end-to-end: set temp, set probe target, lights, prime, off
 - [x] Cook recorder + native notifications (probe target, pellets, errors)
 - [x] Unified, tailable main+renderer log (`/tmp/openkb-pit-boss.log`)
-- [x] Packaged app is self-contained: sidecar frozen to a standalone binary (no
-  system Python/venv) — verified no external refs + runs from the bundle (ADR 0005).
-  Bundle 357M → 288M. (A full on-a-clean-Mac BLE smoke test is still ideal.)
-- [ ] Bluetooth permission UX is graceful: clear prompt + guidance when denied
-- [x] Auto-reconnect proven across real BLE drops (short antenna range) — iOS
-  recovers a dropped link in **8–17s with no user action**, verified on the grill
-  at -95 dBm (2026-09-19). The system holds the reconnect, so it completes with
-  the app suspended; see `ios/README.md` → Staying connected
-- [ ] Runs/builds from a fresh checkout (README documents how) — incl. icon build
-- [x] Security pass run; findings fixed or accepted (SECURITY.md — 2026-07-19)
-- [x] Data storage & backup decided: data in `userData` (not the repo), app name
-  pinned, local-only backup accepted for a grill controller (ADR 0004)
-- [x] Notable decisions recorded (docs/adr/ — 0001 process, 0002 graceful
-  shutdown, 0003 grill discovery & model selection, 0004 local-only storage,
-  0005 frozen sidecar binary)
-- [x] Works for anyone: first-run wizard scans, finds the grill, and picks the
-  model (any Bluetooth Pit Boss grill, not just the dev's PB1100PSC3)
-
-Beyond the original v1 bar, the app grew a monitoring + fire-safety suite (see
-`docs/session-review.html` and `docs/detection-test-plan.md`):
-- [x] Per-source panels: grill + each probe with its own chart; component-activity
-  timeline (auger/fan/igniter); custom probe labels saved into each cook
-- [x] Estimated pellet level from auger run-time (refill/emptied resets)
-- [x] Anomaly detection: lid-open vs. out-of-pellets, over-temp, grease-fire flare-up
 - [x] Graceful shutdown (cool-to-200 → off → device cool-down) — prevents the
   hopper burnback that motivated this project; **validated on the grill 2026-07-16**
-- [x] Maintenance cycles (cooks / run-hours / flare-ups) with cleaning reminders
-- [x] In-app status bar with the grill lifecycle + relayed notifications
-- [x] Prominent header **session clock** — ticking elapsed time of the live cook
-  (flame-lit when running), or a past cook's total length when one is selected
-- [x] Cooking knowledge base shared by both apps from one file (ADR 0007):
-  45 cuts, 7 named methods, USDA floors — with drift guards in `npm test`
-- [x] Stall-aware cook estimates on both apps, from one algorithm held to shared
-  golden vectors (`data/estimate-vectors.json`)
-- [x] Desktop UI supports **both themes**, OS-following with an override, every
-  colour from the token layer (canvas included), AA-verified in `npm test`
-- [x] Desktop screenshots are reproducible: `npm run screenshots` drives the real
-  app against a committed replay fixture, no grill attached
+- [x] Monitoring + fire-safety suite: per-source panels and charts, component
+  activity timeline, estimated pellet level, anomaly detection (lid-open vs.
+  out-of-pellets, over-temp, grease-fire flare-up), maintenance cycles, in-app
+  status bar, header session clock
+- [x] Cooking UI: cut picker, named methods with stage tracking, and per-probe
+  ETAs that declare their stall and pellet-outage allowances rather than hiding
+  them
+- [x] Packaged app is self-contained: sidecar frozen to a standalone binary (no
+  system Python/venv) — verified no external refs + runs from the bundle
+  (ADR 0005). Bundle 357M → 288M
+- [x] Works for anyone: the first-run wizard scans, finds the grill and picks the
+  model — any Bluetooth Pit Boss grill, not just the dev's PB1100PSC3
+- [x] A clean stop path (`npm run stop`) that cannot orphan a process still
+  holding the Bluetooth connection
+- [x] `npm test` green — 8 suites: thermal, shutdown, maintenance, config,
+  estimate, cooking, shared-data drift, contrast (2026-09-19)
+- [ ] Bluetooth permission UX is graceful: clear prompt + guidance when denied.
+  **Not started** — there is no permission handling in `src/` at all, so a denial
+  is currently indistinguishable from a grill that isn't switched on
+- [ ] Runs/builds from a fresh checkout (README documents how) — incl. icon build
+- [ ] The packaged app is smoke-tested on a clean Mac against a real grill
+
+### iOS (ADR 0006)
+- [x] Protocol ported to Swift (`PitBossKit`); the per-model command and parse
+  routines run on JavaScriptCore from the same `grills.json` pytboss uses, so
+  **all 128 models** are supported rather than only the dev's
+- [x] Correctness pinned to pytboss by generated golden vectors —
+  `npm run ios:verify`, **1346 checks**, including protocol conformance across
+  all 128 models (2026-09-19)
+- [x] Builds warning-free and runs on the phone (team `24PG2KGN86`); a real cook
+  decodes end-to-end
+- [x] Bluetooth permission UX is graceful: the usage description is declared, and
+  a denial surfaces the exact Settings path instead of a silent no-op
+- [x] Auto-reconnect proven across real BLE drops — **8–17s with no user action**,
+  verified on the grill at -95 dBm (2026-09-19). The system holds the reconnect,
+  so it completes with the app suspended; see `ios/README.md` → Staying connected
+- [x] Graceful shutdown ported with the desktop's thresholds and its test cases;
+  `UIBackgroundModes: bluetooth-central` keeps a cool-down running when the phone
+  is pocketed
+- [x] Cook history persists in the desktop's own JSONL format, replays its curve
+  and activity timeline, and cooks can be named and deleted
+- [x] Probe targets and naming, pellet-hopper estimate, maintenance tracking with
+  a pre-cook checklist, anomaly detection, and lock-screen notifications
+- [x] The setpoint ladder is resolved without a model number (ADR 0010) —
+  candidates eliminated from what the grill itself accepts or refuses
+- [ ] The ladder inference's one unverified assumption is settled: whether
+  `grillSetTemp` reports the accepted value or echoes the request. Every
+  `requested → reported` pair is logged; one cook with a 190° pick decides it
 
 ## Now / Next
 - **Now: both apps carry the same cooking knowledge (ADR 0007, implemented).**
