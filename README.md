@@ -153,6 +153,12 @@ python python/livetest.py PBL-   # connect by name, print live state (read-only)
 python python/test_sidecar.py    # drive the sidecar end-to-end (read-only)
 ```
 
+These four are also the **reference implementation of the scan → probe → livetest
+ladder** in the harness's `docs/DISCOVERY-PLAYBOOK.md` — the order you work an
+unknown BLE device in: does it advertise, what services does it expose, does a
+read-only decode hold up against real traffic. Worth keeping even once the app
+works: they are the diagnostic path when someone reports "it won't connect."
+
 ## Protocol notes
 
 - The grill advertises as `PBL-<MAC>`; `PBL` is also its pytboss control board.
