@@ -1,0 +1,6 @@
+# Build-time Python dependencies — NOT needed to run the app, and deliberately
+# kept out of requirements.txt so they stay out of the frozen sidecar binary
+# (scripts/build-sidecar.mjs freezes the venv the sidecar imports from).
+#
+# Installed on demand by `npm run icon`.
+Pillow>=11.0                 # icon rendering (scripts/make_icon.py)

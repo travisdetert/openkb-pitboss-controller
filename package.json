@@ -10,7 +10,7 @@
     "setup": "node scripts/setup.mjs",
     "build": "tsc -p tsconfig.json && npm run copy-assets",
     "copy-assets": "node scripts/copy-assets.js",
-    "icon": "python scripts/make_icon.py && iconutil -c icns build/icon.iconset -o build/icon.icns",
+    "icon": ".venv/bin/python -m pip install -q -r requirements-dev.txt && .venv/bin/python scripts/make_icon.py && iconutil -c icns build/icon.iconset -o build/icon.icns",
     "start": "npm run build && electron .",
     "dev": "npm run build && electron . --dev",
     "watch": "tsc -p tsconfig.json -w",

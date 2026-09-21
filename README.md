@@ -108,7 +108,22 @@ npm start          # builds, launches, and opens the first-run wizard
 
 `npm run setup` (`scripts/setup.mjs`) runs `npm install`, creates the `.venv`, and
 installs the pinned deps from `requirements.txt`. It's idempotent — re-run it
-anytime. Other scripts: `npm test` (unit suite), `npm run dev` (devtools open).
+anytime. Other scripts: `npm test` (unit suite), `npm run dev` (devtools open),
+`npm run stop` / `npm run restart` (clean shutdown — never leaves a process
+holding the Bluetooth connection), `npm run screenshots` (regenerate
+`docs/screenshots/` from a committed replay fixture, no grill needed).
+
+Regenerating the app icon is a separate, maintainer-only step, because it needs
+a build-time dependency the app itself does not:
+
+```bash
+npm run icon       # installs Pillow into .venv, then renders every icon size
+```
+
+It writes `build/icon.png`, `build/icon.icns`, the menu-bar tray templates, and
+the square 1024px iOS icon, all from `scripts/make_icon.py`. Pillow lives in
+`requirements-dev.txt` rather than `requirements.txt` so it stays out of the
+frozen sidecar binary.
 
 macOS will prompt for **Bluetooth permission** the first time it scans — allow it
 (System Settings → Privacy & Security → Bluetooth).
