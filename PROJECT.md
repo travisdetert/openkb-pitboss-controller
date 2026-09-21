@@ -83,9 +83,15 @@ builds.
   holding the Bluetooth connection
 - [x] `npm test` green — 8 suites: thermal, shutdown, maintenance, config,
   estimate, cooking, shared-data drift, contrast (2026-09-19)
-- [ ] Bluetooth permission UX is graceful: clear prompt + guidance when denied.
-  **Not started** — there is no permission handling in `src/` at all, so a denial
-  is currently indistinguishable from a grill that isn't switched on
+- [x] Bluetooth permission UX is graceful: a denial, a restriction, a radio
+  that is off and a Mac with no BLE each say so by name, with the Settings
+  button offered only where Settings is the fix — instead of all four reading
+  as "no grills found". Read from bleak's structured error enum, not a parsed
+  message. Verified on screen in both themes (2026-09-20)
+- [ ] That denial path is confirmed against a *real* macOS denial. The UI is
+  verified, but the detection branch itself has only ever run under simulation
+  (`PITBOSS_BT_BLOCKED`) — a one-time `tccutil reset Bluetooth` would exercise
+  it for real
 - [x] Runs/builds from a fresh checkout, README documents how — incl. the icon
   build, verified by cloning clean and running it (2026-09-20). This caught two
   real breakages: `npm run icon` called a bare `python` that modern macOS does
@@ -122,6 +128,8 @@ builds.
 ## Now / Next
 
 **Now — both apps are verified, the branch is clean, and it is ready to push.**
+The desktop's Bluetooth permission UX landed on 2026-09-20, closing the last
+capability gap between the two apps.
 Two months of work that had sat uncommitted since July landed in eight commits
 on 2026-09-19/20. As of 2026-09-20: `npm test` green (8 suites),
 `npm run ios:verify` 1346 checks across 128 models, `npm run ios:interop`
@@ -133,19 +141,14 @@ set up, build, test and render its icons. **Nothing is pushed** — the branch i
 **Next, in order:**
 1. **Push.** The gate that was holding it — a security pass over the reconnect
    rework — is done and recorded.
-2. **Bluetooth permission UX on the desktop** — the last real capability gap
-   between the two apps. iOS declares a usage description and turns a denial
-   into the exact Settings path; the desktop has no permission handling at all,
-   so a denial is indistinguishable from a grill that isn't switched on.
-   *One DoD box.*
-3. **One cook with a 190° setpoint pick**, to settle whether `grillSetTemp`
+2. **One cook with a 190° setpoint pick**, to settle whether `grillSetTemp`
    reports the accepted value or echoes the request — the single unverified
    assumption under the iOS ladder inference (ADR 0010). Every
    `requested → reported` pair is already logged, so the cook just has to
    happen. *One DoD box.*
 
-**Then:** the clean-Mac packaged smoke test against a real grill (*the last DoD
-box*) · method-stage notifications on the desktop, which iOS already schedules ·
+**Then:** a real `tccutil reset Bluetooth` to exercise the denial branch rather
+than its simulation · the clean-Mac packaged smoke test against a real grill · method-stage notifications on the desktop, which iOS already schedules ·
 interruption markers drawn on the desktop cook chart · calibrating the pellet
 feed-rate against a weighed hopper.
 

@@ -258,3 +258,21 @@ findings up to 8.7. The floor is now `>=12.3.0`. Regenerating every icon on
 
 Result: **clean** — no High/Critical introduced, and every previously tracked
 dependency finding is closed.
+
+### 2026-09-20 — Bluetooth permission UX
+One new IPC channel, `pitboss:bluetooth:settings`. It takes **no arguments** and
+opens a single hardcoded URL
+(`x-apple.systempreferences:com.apple.preference.security?Privacy_Bluetooth`)
+via `shell.openExternal`, guarded on `process.platform === 'darwin'`. Nothing
+renderer-supplied reaches it, so it cannot be steered at another scheme or
+target — the usual `openExternal` risk.
+
+The new `PITBOSS_BT_BLOCKED` affordance is dev-only and, like the existing
+replay and screenshot flags, is an environment variable: trusted input, and
+validated against a fixed list regardless. It only ever *degrades* what the app
+believes it can do — it cannot fabricate a working connection.
+
+The blocked reason is rendered through `textContent`, not `innerHTML`, and the
+message it carries originates in bleak, not in a device.
+
+Result: clean — no new externally-reachable surface.

@@ -126,7 +126,15 @@ the square 1024px iOS icon, all from `scripts/make_icon.py`. Pillow lives in
 frozen sidecar binary.
 
 macOS will prompt for **Bluetooth permission** the first time it scans — allow it
-(System Settings → Privacy & Security → Bluetooth).
+(System Settings → Privacy & Security → Bluetooth). There is no cloud fallback, so
+nothing works without it.
+
+If you decline, or the radio is off, the app says which of those it is and offers a
+button straight to the right Settings pane — it never reports a blocked radio as
+"no grills found". It keeps retrying in the background, so granting access
+reconnects it with no rescan and no relaunch.
+
+![The app explaining that Bluetooth permission is off, with a button to the right Settings pane.](docs/screenshots/bluetooth-denied.png)
 
 **First run:** with no grill configured yet, the app opens a **setup wizard** —
 power on your grill, tap *Scan*, pick it from the list, and choose your model
