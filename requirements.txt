@@ -4,4 +4,5 @@
 pytboss==2025.12.0            # BLE framing + per-control-board decoding (the core)
 bleak==3.0.2                 # cross-platform BLE transport
 bleak-retry-connector==4.6.1 # resilient reconnects
-aiohttp==3.14.1              # pulled by pytboss
+aiohttp==3.14.3              # pulled by pytboss; 3.14.3 clears PYSEC-2026-3545/3546/3547
+idna>=3.15                   # transitive (via yarl/aiohttp); floor clears PYSEC-2026-215
