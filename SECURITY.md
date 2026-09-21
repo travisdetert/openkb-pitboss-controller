@@ -250,5 +250,11 @@ Re-verified after the bump: sidecar imports resolve, the frozen binary rebuilds
 and runs with no external Python references, `npm test` green, `ios:interop`
 green.
 
+The new `requirements-dev.txt` (build-time only) initially declared
+`Pillow>=11.0`, and the rescan that caught it is the reason this note exists: a
+floor is what the scanner resolves, so `>=11.0` meant 11.0, which carries seven
+findings up to 8.7. The floor is now `>=12.3.0`. Regenerating every icon on
+12.3.0 produces byte-identical output, so the bump costs nothing.
+
 Result: **clean** — no High/Critical introduced, and every previously tracked
 dependency finding is closed.

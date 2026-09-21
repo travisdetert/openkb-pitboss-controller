@@ -3,4 +3,4 @@
 # (scripts/build-sidecar.mjs freezes the venv the sidecar imports from).
 #
 # Installed on demand by `npm run icon`.
-Pillow>=11.0                 # icon rendering (scripts/make_icon.py)
+Pillow>=12.3.0               # icon rendering (scripts/make_icon.py); 12.3.0 floor clears PYSEC-2026-3451/3453/3454/3493/3494/3495/3496
