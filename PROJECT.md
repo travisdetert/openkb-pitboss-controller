@@ -86,6 +86,12 @@ builds.
   holding the Bluetooth connection
 - [x] `npm test` green — 8 suites: thermal, shutdown, maintenance, config,
   estimate, cooking, shared-data drift, contrast (2026-09-19)
+- [x] **The packaged app builds and is shippable** — `npm run pack` produces
+  `openkb-pit-boss.app` (288M) with the sidecar frozen inside (12M, no external
+  Python references, runs from the bundle), both Bluetooth usage strings in
+  `Info.plist`, and this session's new files genuinely inside the asar
+  (`dist/data/cooking.json`, `PBCooking.js`, `PBProtocol.js`) rather than only
+  on disk. Verified 2026-09-20 — a clean `tsc` proves none of that
 - [x] Bluetooth permission UX is graceful: a denial, a restriction, a radio
   that is off and a Mac with no BLE each say so by name, with the Settings
   button offered only where Settings is the fix — instead of all four reading
@@ -109,7 +115,8 @@ builds.
   `npm run ios:verify`, **1346 checks**, including protocol conformance across
   all 128 models (2026-09-19)
 - [x] Builds warning-free and runs on the phone (team `24PG2KGN86`); a real cook
-  decodes end-to-end
+  decodes end-to-end. **The app target still packages**: `xcodebuild` →
+  BUILD SUCCEEDED with no code warnings, re-verified 2026-09-20
 - [x] Bluetooth permission UX is graceful: the usage description is declared, and
   a denial surfaces the exact Settings path instead of a silent no-op
 - [x] Auto-reconnect proven across real BLE drops — **8–17s with no user action**,
