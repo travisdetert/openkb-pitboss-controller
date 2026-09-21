@@ -4,7 +4,8 @@ Date: 2026-09-18
 
 ## Status
 
-Accepted — **extended**. This ADR records the decision to build the app and how
+Accepted — **extended**. **Implemented — 2026-09-18** (on the phone, decoding a
+real cook). This ADR records the decision to build the app and how
 the protocol was ported. The app has since grown well beyond what is described
 here; the decisions made as it did are recorded separately:
 

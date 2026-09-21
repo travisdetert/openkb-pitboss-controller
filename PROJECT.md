@@ -49,7 +49,9 @@ builds.
   0005 frozen sidecar binary, 0006 native iOS app, 0007 sharing the cooking
   knowledge base, 0008 a cook is the food not the fire, 0009 the cooking
   knowledge base, 0010 resolving grill capabilities, 0011 reporting a blocked
-  radio — all eleven Accepted
+  radio — all eleven Accepted, and the ten that describe something built now
+  say so in their Status line, so the harness dashboard can tell a shipped
+  decision from one nobody has started
 - [x] Data storage & backup decided: data in `userData` (not the repo), app name
   pinned, local-only backup accepted for a grill controller (ADR 0004)
 - [x] Security passes run; findings fixed or accepted (SECURITY.md — 2026-07-19

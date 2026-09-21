@@ -4,7 +4,7 @@ Date: 2026-07-15
 
 ## Status
 
-Accepted
+Accepted. **Implemented — 2026-07-16** (validated on the grill).
 
 ### The incident that motivated this
 
