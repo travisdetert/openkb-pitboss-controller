@@ -24,6 +24,7 @@
     "ios:interop": "node ios/Tools/check-interop.mjs",
     "ios:screens": "node ios/Tools/screenshots.mjs",
     "ios:replay": "node ios/Tools/make-fixture-cook.mjs /tmp/fixture-cook.jsonl",
+    "doctor": "node scripts/doctor.mjs",
     "stop": "node scripts/stop.mjs",
     "restart": "npm run stop && npm start",
     "data:sync": "node scripts/sync-data.mjs",
