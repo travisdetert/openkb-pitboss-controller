@@ -68,7 +68,8 @@ export interface ModelInfo {
 // Events pushed from sidecar -> main -> renderer
 export type SidecarEvent =
   | { type: 'ready'; model_default: string; name_default: string }
-  | { type: 'status'; connected: boolean; connecting: boolean; reason: string; device?: string }
+  | { type: 'status'; connected: boolean; connecting: boolean; reason: string; device?: string;
+      bt_reason?: BluetoothBlockedReason; bt_message?: string }
   | { type: 'capabilities'; model: string; min_temp: number; max_temp: number; temp_increments: number[]; meat_probes: number; has_lights: boolean }
   | { type: 'state'; data: GrillState }
   | { type: 'scan_result'; id?: number; devices: ScanDevice[] }
@@ -84,6 +85,70 @@ export type SidecarEvent =
   | { type: 'maintenance'; state: MaintenanceState; due: boolean; reasons: string[] };
 
 export type NoticeLevel = 'info' | 'warn' | 'alert';
+
+// ---- Bluetooth availability -------------------------------------------------
+// Why the radio is unusable, when it is. Sent with a `status` whose reason is
+// `bluetooth_unavailable`. These come from bleak's structured
+// BleakBluetoothNotAvailableReason enum rather than a parsed error string, so a
+// library upgrade rewording its messages cannot silently turn a denial back
+// into "no grill found" — which is exactly what it used to look like.
+export type BluetoothBlockedReason =
+  | 'denied'          // the user denied this app at the system prompt
+  | 'restricted'      // blocked by policy / parental controls
+  | 'denied_unknown'  // unauthorized, cause not reported
+  | 'powered_off'     // radio switched off
+  | 'no_radio'        // no BLE hardware, or no central role
+  | 'unknown';
+
+export interface BluetoothGuidance {
+  title: string;
+  detail: string;
+  /** True when System Settings → Privacy & Security → Bluetooth is the fix. */
+  openSettings: boolean;
+}
+
+/** What to tell the user, and whether a Settings button would help. */
+export function bluetoothGuidance(reason: BluetoothBlockedReason): BluetoothGuidance {
+  switch (reason) {
+    case 'denied':
+    case 'denied_unknown':
+      return {
+        title: 'Bluetooth permission is turned off',
+        detail: 'This app needs Bluetooth to reach your grill — there is no cloud '
+          + 'fallback, so nothing works without it. Turn it on for “openkb-pit-boss” '
+          + 'in System Settings, and the app reconnects on its own.',
+        openSettings: true,
+      };
+    case 'restricted':
+      return {
+        title: 'Bluetooth is restricted on this Mac',
+        detail: 'A policy or parental-control profile is blocking Bluetooth. '
+          + 'An administrator has to lift the restriction.',
+        openSettings: true,
+      };
+    case 'powered_off':
+      return {
+        title: 'Bluetooth is switched off',
+        detail: 'Turn Bluetooth on from Control Centre or System Settings. '
+          + 'The app keeps trying and reconnects the moment it comes back.',
+        openSettings: false,
+      };
+    case 'no_radio':
+      return {
+        title: 'This Mac has no Bluetooth LE radio',
+        detail: 'The grill is reachable over Bluetooth Low Energy only, so this '
+          + 'machine cannot talk to it.',
+        openSettings: false,
+      };
+    default:
+      return {
+        title: 'Bluetooth is unavailable',
+        detail: 'macOS reported Bluetooth as unavailable without saying why. '
+          + 'Check System Settings, and that the radio is on.',
+        openSettings: true,
+      };
+  }
+}
 
 // Commands renderer -> main -> sidecar
 export type GrillCommand =
@@ -179,6 +244,7 @@ export const IPC = {
   shutdown: 'pitboss:shutdown',    // renderer -> main: 'auto' | 'now' | 'cancel'
   cleaned: 'pitboss:cleaned',      // renderer -> main: reset maintenance counters
   getLoginItem: 'pitboss:login:get',
+  btSettings: 'pitboss:bluetooth:settings',  // open the macOS Bluetooth privacy pane
   setLoginItem: 'pitboss:login:set',
   cooking: 'pitboss:cooking',       // the shared cuts/methods catalogue (read once)
   cookEvents: 'pitboss:cooks:events',  // interruption events for the active cook

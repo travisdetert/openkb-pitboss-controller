@@ -35,6 +35,11 @@ const ratio = (a, b) => {
 
 const BACKGROUNDS = ['bg', 'bg-card', 'bg-card2'];
 const FOREGROUNDS = ['text', 'muted', 'flame', 'ok', 'warn', 'danger', 'blue'];
+// Foreground/background pairs that are not "text on a surface" — a label sitting
+// ON an accent fill. Missed for a long time because the surface checks above
+// cannot see them, and the light theme's darker --flame made the shared dark
+// label fail AA at 3.45:1 the moment primary buttons started rendering filled.
+const ON_PAIRS = [['on-flame', 'flame']];
 const AA = 4.5;
 
 let fail = 0, checks = 0;
@@ -50,6 +55,14 @@ for (const [name, sel] of [['dark', ':root {'], ['light', ':root[data-theme="lig
       if (!good) fail++;
       console.log(`  ${fg.padEnd(10)} on ${bg.padEnd(9)} ${r.toFixed(2).padStart(5)}  ${good ? 'OK' : 'FAIL'}`);
     }
+  }
+  for (const [fg, bg] of ON_PAIRS) {
+    if (!t[fg] || !t[bg]) { console.log(`  MISSING ${fg} or ${bg}`); fail++; continue; }
+    const r = ratio(t[fg], t[bg]);
+    checks++;
+    const good = r >= AA;
+    if (!good) fail++;
+    console.log(`  ${fg.padEnd(10)} on ${bg.padEnd(9)} ${r.toFixed(2).padStart(5)}  ${good ? 'OK' : 'FAIL'}`);
   }
 }
 

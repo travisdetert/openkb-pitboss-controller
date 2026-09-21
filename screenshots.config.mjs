@@ -26,5 +26,11 @@ export default {
       caption: 'Choosing what is on a probe: 45 cuts grouped by category, each with its suggested target.' },
     { name: 'cut-detail', theme: 'dark', click: ['p2CutBtn', 'cutItem0'],
       caption: 'One cut, and only that cut: its targets labelled by kind, the USDA floor, its methods, and its usual grill temperature.' },
+    // The permission-denied state, captured authentically rather than staged:
+    // the app really is being told the radio is unavailable.
+    { name: 'bluetooth-denied', theme: 'dark', btBlocked: 'denied',
+      caption: 'Bluetooth denied: what is wrong, the button that opens the right Settings pane, and the promise that it reconnects on its own.' },
+    { name: 'bluetooth-denied-light', theme: 'light', btBlocked: 'denied',
+      caption: 'The same guidance in the light theme — this is often the first screen a new user sees, so it is documented in both.' },
   ],
 };

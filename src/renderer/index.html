@@ -44,6 +44,17 @@
   <!-- Live status line: grill lifecycle + surfaced notifications -->
   <div id="statusBar" class="status-bar level-off">Connecting…</div>
 
+  <!-- Bluetooth blocked: the app is useless without the radio, so this is not
+       dismissible. It clears itself the moment access comes back. -->
+  <div id="btBlocked" class="bt-blocked hidden" role="alert">
+    <div class="btb-head"><span class="btb-icon" aria-hidden="true">⚠</span><span class="btb-title" id="btbTitle"></span></div>
+    <p class="btb-detail" id="btbDetail"></p>
+    <div class="btb-actions">
+      <button id="btbSettingsBtn" class="btn btn-save hidden">Open Bluetooth settings</button>
+      <span class="btb-retry" id="btbRetry">Retrying automatically — no need to come back here.</span>
+    </div>
+  </div>
+
   <!-- Sticky alert banner: important warnings stay until dismissed -->
   <div id="alertBanner" class="alert-banner hidden">
     <span class="ab-icon">⚠</span>
@@ -296,6 +307,7 @@
   <!-- Shared logic, wrapped from src/shared/ at build time so the renderer and
        the main process run the same estimator rather than two copies of it
        (scripts/copy-assets.js, ADR 0007). Must load before renderer.js. -->
+  <script src="./PBProtocol.js"></script>
   <script src="./PBCooking.js"></script>
   <script src="./PBEstimate.js"></script>
   <script src="./renderer.js"></script>

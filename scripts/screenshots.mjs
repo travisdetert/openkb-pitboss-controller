@@ -43,6 +43,7 @@ function capture(shot) {
         PITBOSS_SHOT: out,
         PITBOSS_SHOT_DELAY: String(cfg.settleMs),
         ...(shot.click ? { PITBOSS_SHOT_CLICK: shot.click.join(',') } : {}),
+        ...(shot.btBlocked ? { PITBOSS_BT_BLOCKED: shot.btBlocked } : {}),
       },
       stdio: 'ignore',
     });

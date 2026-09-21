@@ -31,6 +31,7 @@ for (const file of ['cooking.json']) {
 const shared = [
   { file: 'estimate.js', global: 'PBEstimate' },
   { file: 'cooking.js', global: 'PBCooking' },
+  { file: 'protocol.js', global: 'PBProtocol' },
 ];
 const sharedOut = path.join(__dirname, '..', 'dist', 'renderer');
 for (const { file, global } of shared) {

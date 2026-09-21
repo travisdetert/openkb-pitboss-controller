@@ -28,6 +28,9 @@ no cloud, no account.
   {"type":"ready"}
   {"type":"scan_result","id":1,"devices":[{"name":...,"rssi":...}]}
   {"type":"status","connected":bool,"connecting":bool,"reason":str}
+      reason "bluetooth_unavailable" also carries:
+        "bt_reason": denied|restricted|denied_unknown|powered_off|no_radio|unknown
+        "bt_message": the human-readable reason from bleak
   {"type":"capabilities","model":...,"min_temp":...,"max_temp":...,
                           "meat_probes":...,"has_lights":...}
   {"type":"state","data":{...}}
@@ -45,6 +48,10 @@ import traceback
 from typing import Any
 
 from bleak import BleakScanner
+from bleak.exc import (
+    BleakBluetoothNotAvailableError,
+    BleakBluetoothNotAvailableReason as BtReason,
+)
 from pytboss import PitBoss, BleConnection
 from pytboss.grills import get_grill, get_grills
 
@@ -57,6 +64,40 @@ def emit(obj: dict[str, Any]) -> None:
     """Write one JSON event to stdout (the channel the app parses)."""
     sys.stdout.write(json.dumps(obj, default=str) + "\n")
     sys.stdout.flush()
+
+
+# Bluetooth-unavailable reasons, mapped to stable wire codes.
+#
+# bleak raises a STRUCTURED BleakBluetoothNotAvailableError carrying an enum, so
+# the app never has to match on an error string that a library upgrade can
+# reword. The distinction that matters to a user is "you denied us" (fixable in
+# System Settings) versus "the radio is off" (fixable in Control Centre) versus
+# "this Mac has no Bluetooth" (not fixable at all) — and none of those is
+# "no grill found", which is what all of them used to look like.
+_BT_CODES = {
+    BtReason.DENIED_BY_USER: "denied",
+    BtReason.DENIED_BY_SYSTEM: "restricted",
+    BtReason.DENIED_BY_UNKNOWN: "denied_unknown",
+    BtReason.POWERED_OFF: "powered_off",
+    BtReason.NO_BLUETOOTH: "no_radio",
+    BtReason.NO_BLE_CENTRAL_ROLE: "no_radio",
+    BtReason.UNKNOWN: "unknown",
+}
+
+
+def emit_bt_unavailable(ex: BleakBluetoothNotAvailableError) -> str:
+    """Report Bluetooth as blocked, with the reason, and return the wire code.
+
+    Emitted as a `status` so it travels the same path every other connection
+    state does — the UI already re-renders on status, and a blocked radio IS a
+    connection state, not a special case bolted on beside one.
+    """
+    code = _BT_CODES.get(ex.reason, "unknown")
+    log(f"bluetooth unavailable ({code}): {ex}")
+    emit({"type": "status", "connected": False, "connecting": False,
+          "reason": "bluetooth_unavailable",
+          "bt_reason": code, "bt_message": str(ex.args[0])})
+    return code
 
 
 def log(*args: Any) -> None:
@@ -99,7 +140,14 @@ class GrillController:
         return best[0] if best else None
 
     async def scan(self, seconds: float):
-        found = await BleakScanner.discover(timeout=seconds, return_adv=True)
+        # A blocked radio must NOT come back as an empty device list: "no grills
+        # found" is the single most misleading thing the wizard could say to
+        # someone who simply denied the permission prompt.
+        try:
+            found = await BleakScanner.discover(timeout=seconds, return_adv=True)
+        except BleakBluetoothNotAvailableError as ex:
+            emit_bt_unavailable(ex)
+            raise
         devices = []
         for _addr, (device, adv) in found.items():
             name = device.name or adv.local_name or ""
@@ -131,6 +179,13 @@ class GrillController:
               "reason": "scanning"})
         try:
             device = await self._find_device(self.name_prefix, timeout=15.0)
+        except BleakBluetoothNotAvailableError as ex:
+            # Blocked, not absent. Return without emitting "not_found" — but the
+            # caller still starts the reconnect loop, so the moment the user
+            # grants permission or switches the radio on, the next attempt
+            # succeeds with no rescan and no relaunch.
+            emit_bt_unavailable(ex)
+            return False
         except Exception as ex:  # noqa: BLE001
             log("scan failed:", repr(ex))
             device = None

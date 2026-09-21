@@ -16,6 +16,7 @@ const IPC = {
   shutdown: 'pitboss:shutdown',
   cleaned: 'pitboss:cleaned',
   getLoginItem: 'pitboss:login:get',
+  btSettings: 'pitboss:bluetooth:settings',
   setLoginItem: 'pitboss:login:set',
   cooking: 'pitboss:cooking',
   cookEvents: 'pitboss:cooks:events',
@@ -62,6 +63,7 @@ const api = {
   cleaned: () => ipcRenderer.invoke(IPC.cleaned),
   getCooking: () => ipcRenderer.invoke(IPC.cooking),
   getCookEvents: () => ipcRenderer.invoke(IPC.cookEvents),
+  openBluetoothSettings: () => ipcRenderer.invoke(IPC.btSettings),
   getLoginItem: () => ipcRenderer.invoke(IPC.getLoginItem),
   setLoginItem: (open: boolean) => ipcRenderer.invoke(IPC.setLoginItem, open),
 

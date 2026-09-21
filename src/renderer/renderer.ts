@@ -62,7 +62,8 @@ interface CookMeta {
 }
 type SidecarEvent =
   | { type: 'ready'; model_default: string; name_default: string }
-  | { type: 'status'; connected: boolean; connecting: boolean; reason: string; device?: string }
+  | { type: 'status'; connected: boolean; connecting: boolean; reason: string; device?: string;
+      bt_reason?: BluetoothBlockedReason; bt_message?: string }
   | Capabilities
   | { type: 'state'; data: GrillState }
   | { type: 'scan_result'; id?: number; devices: ScanDevice[] }
@@ -101,6 +102,7 @@ interface PitbossApi {
   getCookEvents(): Promise<CookEvent[]>;
   getLoginItem(): Promise<boolean>;
   setLoginItem(open: boolean): Promise<boolean>;
+  openBluetoothSettings(): Promise<boolean>;
   onEvent(cb: (evt: SidecarEvent) => void): () => void;
 }
 interface Window { pitboss: PitbossApi; }
@@ -134,6 +136,14 @@ type Verdict =
   | { kind: 'eta'; seconds: number; ratePerHour: number; phase: string; allowances: Allowance[] }
   | { kind: 'alreadyThere' } | { kind: 'stalled'; sinceSeconds: number }
   | { kind: 'tooEarly' } | { kind: 'noTarget' };
+
+type BluetoothBlockedReason =
+  | 'denied' | 'restricted' | 'denied_unknown' | 'powered_off' | 'no_radio' | 'unknown';
+
+declare const PBProtocol: {
+  bluetoothGuidance(reason: BluetoothBlockedReason):
+    { title: string; detail: string; openSettings: boolean };
+};
 
 declare const PBCooking: {
   CATEGORY_LABELS: Record<MeatCategory, string>;
@@ -499,6 +509,9 @@ function clearProbeTarget(probe: number): void {
 }
 let grillName = 'PBL-';
 let grillModel = 'PB1100PSC3';
+// Module scope, not boot()-local: the Bluetooth banner needs it to decide
+// whether "retrying automatically" is actually true.
+let grillConfigured = false;
 
 // Temperature history: a buffer of live samples plus a "viewing" mode that can
 // instead show a past cook (null = follow live).
@@ -564,6 +577,31 @@ async function run(label: string, p: Promise<unknown>): Promise<void> {
   } catch (e) {
     toast(`${label} failed: ${(e as Error).message}`, true);
   }
+}
+
+// ---- Bluetooth blocked ------------------------------------------------------
+// The one failure this app cannot work around: no radio, no grill. Kept as its
+// own banner rather than a status-bar line because the status bar is transient
+// and this is a standing condition the user has to act on.
+//
+// Deliberately NOT dismissible, and deliberately self-clearing: the sidecar
+// keeps retrying, so the moment permission is granted or the radio comes back,
+// the next status event removes this with no rescan and no relaunch.
+let btBlocked: BluetoothBlockedReason | null = null;
+
+function renderBtBlocked(): void {
+  const el = $('btBlocked');
+  if (!btBlocked) { el.classList.add('hidden'); return; }
+  const g = PBProtocol.bluetoothGuidance(btBlocked);
+  $('btbTitle').textContent = g.title;
+  $('btbDetail').textContent = g.detail;
+  $('btbSettingsBtn').classList.toggle('hidden', !g.openSettings);
+  // "Retrying" is only true while the app wants a connection. During the
+  // first-run wizard nothing is retrying yet, so saying so would be a lie.
+  $('btbRetry').textContent = grillConfigured
+    ? 'Retrying automatically — no need to come back here.'
+    : 'Scan again once Bluetooth is available.';
+  el.classList.remove('hidden');
 }
 
 // ---- status bar ------------------------------------------------------------
@@ -1455,6 +1493,12 @@ function handleEvent(evt: SidecarEvent): void {
       connecting = evt.connecting;
       if (evt.device) state.__device = evt.device;
       if (evt.device === 'REPLAY') isReplay = true;
+      // Any status that is not the blocked one means the radio answered us, so
+      // the banner clears itself rather than needing its own "unblocked" event.
+      btBlocked = evt.reason === 'bluetooth_unavailable'
+        ? (evt.bt_reason ?? 'unknown')
+        : null;
+      renderBtBlocked();
       // On a fresh connection, adopt the grill's own setpoint (arrives with the
       // next state frame) rather than a stale remembered value.
       if (connected && !was) userSetTarget = false;
@@ -1796,7 +1840,12 @@ async function wizScan(): Promise<void> {
   const list = $('wizDeviceList');
   list.innerHTML = '';
   if (!devices.length) {
-    status.textContent = 'No grills found. Make sure it’s powered on and in range, then scan again.';
+    // A blocked radio finds nothing, which is NOT the same as nothing being
+    // there — "no grills found" would send someone out to the patio to debug a
+    // grill that is working fine. The banner above carries the detail.
+    status.textContent = btBlocked
+      ? 'Can’t scan — Bluetooth is unavailable. See the message above.'
+      : 'No grills found. Make sure it’s powered on and in range, then scan again.';
     return;
   }
   status.textContent = `Found ${devices.length} grill${devices.length === 1 ? '' : 's'}:`;
@@ -1867,6 +1916,9 @@ function wireSettings(): void {
   $('settingsClose').addEventListener('click', closeSettings);
   $('settingsReset').addEventListener('click', resetSettings);
   $('settingsSave').addEventListener('click', saveSettings);
+  $('btbSettingsBtn').addEventListener('click', () => {
+    void window.pitboss.openBluetoothSettings();
+  });
   $('cfgChangeGrill').addEventListener('click', () => { closeSettings(); openWizard(true); });
   $('settingsOverlay').addEventListener('click', (e) => {
     if (e.target === document.getElementById('settingsOverlay')) closeSettings();
@@ -1889,7 +1941,6 @@ async function boot(): Promise<void> {
   wireWizard();
 
   // Restore remembered settings before first render / connect.
-  let grillConfigured = false;
   try {
     const s = await window.pitboss.getSettings();
     grillConfigured = !!s.grillConfigured;

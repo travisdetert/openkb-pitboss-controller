@@ -68,6 +68,51 @@ function startReplay(wc: Electron.WebContents): void {
   wc.on('destroyed', () => clearInterval(tick));
 }
 
+// ---- Bluetooth-blocked (dev) ------------------------------------------------
+// PITBOSS_BT_BLOCKED=<reason> emits exactly the status the sidecar sends when
+// macOS refuses the radio, so the guidance screen can be verified and
+// screenshotted without revoking a real permission — which cannot be scripted
+// anyway, since Bluetooth has no `tccutil reset` and the only revoke is the
+// System Settings toggle.
+//
+// It fakes the MESSAGE, never the state: nothing else in the app is told the
+// radio is fine, and the banner clears on the next genuine status event exactly
+// as it would in production.
+const BT_BLOCK_REASONS = ['denied', 'restricted', 'denied_unknown',
+  'powered_off', 'no_radio', 'unknown'];
+
+/** The simulated reason, or null. Validated once so a typo fails loudly. */
+function btBlockedSim(): string | null {
+  const reason = process.env.PITBOSS_BT_BLOCKED;
+  if (!reason) return null;
+  if (!BT_BLOCK_REASONS.includes(reason)) {
+    log(`PITBOSS_BT_BLOCKED: unknown reason ${reason}; expected one of ${BT_BLOCK_REASONS.join(', ')}`);
+    return null;
+  }
+  return reason;
+}
+
+/**
+ * Rewrite a status event as "Bluetooth blocked" while simulating.
+ *
+ * Applied at the sidecar boundary rather than pushed once into the renderer,
+ * because a one-shot is not a simulation: the real sidecar keeps scanning and
+ * its next `not_found` would wipe the banner seconds later — which is exactly
+ * what happened the first time this was written. When the radio is genuinely
+ * blocked the sidecar cannot report `not_found` at all, so suppressing those is
+ * what makes this faithful instead of merely convenient.
+ */
+function applyBtBlockedSim(evt: SidecarEvent): SidecarEvent {
+  const reason = btBlockedSim();
+  if (!reason || evt.type !== 'status') return evt;
+  return {
+    type: 'status', connected: false, connecting: false,
+    reason: 'bluetooth_unavailable',
+    bt_reason: reason as never,
+    bt_message: 'Simulated via PITBOSS_BT_BLOCKED.',
+  };
+}
+
 // ---- cooking knowledge base -------------------------------------------------
 // data/cooking.json is copied into dist/data/ at build time (scripts/copy-assets.js)
 // so it ships inside the asar. Loaded lazily and cached: it is static data, and
@@ -221,6 +266,13 @@ function createWindow(): void {
   win.webContents.on('did-finish-load', () => {
     if (win) replayTo(win.webContents);
     if (win) startReplay(win.webContents);
+    // Seed the blocked state immediately so a capture does not depend on the
+    // sidecar happening to emit a status first; every later status is rewritten
+    // by applyBtBlockedSim, so it stays put.
+    if (win && btBlockedSim()) {
+      win.webContents.send(IPC.event, applyBtBlockedSim(
+        { type: 'status', connected: false, connecting: false, reason: 'seed' }));
+    }
   });
 
   // Dev affordance: PITBOSS_SHOT=<path> dumps a PNG of the rendered UI once
@@ -327,7 +379,7 @@ function startSidecar(): void {
       }
       wasConnected = evt.connected;
     }
-    win?.webContents.send(IPC.event, evt);
+    win?.webContents.send(IPC.event, applyBtBlockedSim(evt));
   });
 
   sidecar.start();
@@ -423,6 +475,21 @@ app.whenReady().then(() => {
   // cached because it never changes at runtime. See ADR 0007.
   ipcMain.handle(IPC.cooking, () => loadCooking());
   ipcMain.handle(IPC.cookEvents, () => recorder!.liveEvents());
+  // Open System Settings straight at the Bluetooth privacy pane. The app cannot
+  // grant its own permission — the most it can do is remove the hunt for where
+  // the switch lives, then keep retrying so the user never has to come back and
+  // press anything here.
+  ipcMain.handle(IPC.btSettings, async () => {
+    if (process.platform !== 'darwin') return false;
+    try {
+      await shell.openExternal(
+        'x-apple.systempreferences:com.apple.preference.security?Privacy_Bluetooth');
+      return true;
+    } catch (e) {
+      log('could not open Bluetooth settings:', (e as Error).message);
+      return false;
+    }
+  });
   ipcMain.handle(IPC.getLoginItem, () => app.getLoginItemSettings().openAtLogin);
   ipcMain.handle(IPC.setLoginItem, (_e, open: boolean) => {
     app.setLoginItemSettings({ openAtLogin: !!open });
