@@ -53,10 +53,12 @@ builds.
   pinned, local-only backup accepted for a grill controller (ADR 0004)
 - [x] Security passes run; findings fixed or accepted (SECURITY.md — 2026-07-19
   first push, 2026-07-21 session manager, 2026-09-18 ×3 for the iOS app)
-- [ ] A security pass covers the BLE reconnect rework of 2026-09-19 — it changes
-  transport code, so it gates the next push
-- [ ] Known dependency CVEs cleared: `aiohttp` (PYSEC-2026-3545) and `idna`
-  (PYSEC-2026-215) in `requirements.txt`, both pulled in by pytboss
+- [x] A security pass covers the BLE reconnect rework and the whole unpushed
+  branch (SECURITY.md — 2026-09-20): gitleaks, osv-scanner, npm audit and
+  semgrep all clean, and semgrep's 6 path-traversal hits analysed and recorded
+  as false positives rather than suppressed
+- [x] Known dependency CVEs cleared — osv-scanner went from 45 findings across
+  11 packages to **0**, and npm audit from 6 to 0 (2026-09-20)
 
 ### Desktop (Electron)
 - [x] Connects to the grill over BLE by stable advertised name and reads live state
@@ -84,7 +86,10 @@ builds.
 - [ ] Bluetooth permission UX is graceful: clear prompt + guidance when denied.
   **Not started** — there is no permission handling in `src/` at all, so a denial
   is currently indistinguishable from a grill that isn't switched on
-- [ ] Runs/builds from a fresh checkout (README documents how) — incl. icon build
+- [x] Runs/builds from a fresh checkout, README documents how — incl. the icon
+  build, verified by cloning clean and running it (2026-09-20). This caught two
+  real breakages: `npm run icon` called a bare `python` that modern macOS does
+  not have, and nothing installed the Pillow it imports
 - [ ] The packaged app is smoke-tested on a clean Mac against a real grill
 
 ### iOS (ADR 0006)
@@ -116,32 +121,31 @@ builds.
 
 ## Now / Next
 
-**Now — both apps are verified, and two months of work is finally committed.**
-Everything from the iOS port through the shared cooking knowledge base had been
-sitting uncommitted since July; it landed in four commits on 2026-09-19. All
-suites green on 2026-09-20: `npm test` (8 suites), `npm run ios:verify` (1346
-checks across 128 models), `npm run ios:interop`, `npm run ios:contrast`, and
-`gitleaks` clean. **Nothing is pushed** — the branch is 4 ahead of
-`origin/main`, and the security pass owed on the reconnect rework gates that.
+**Now — both apps are verified, the branch is clean, and it is ready to push.**
+Two months of work that had sat uncommitted since July landed in eight commits
+on 2026-09-19/20. As of 2026-09-20: `npm test` green (8 suites),
+`npm run ios:verify` 1346 checks across 128 models, `npm run ios:interop`
+green, a full security pass clean (SECURITY.md), every known dependency CVE
+closed (osv-scanner 45 → 0, npm audit 6 → 0), and a fresh clone verified to
+set up, build, test and render its icons. **Nothing is pushed** — the branch is
+8 ahead of `origin/main`, waiting on an explicit go.
 
 **Next, in order:**
-1. **Security pass on the BLE reconnect rework, then push.** `/security-review`
-   on the branch plus `osv-scanner` and `semgrep`; clear the `aiohttp`
-   (PYSEC-2026-3545) and `idna` (PYSEC-2026-215) CVEs while in there. *Two DoD
-   boxes.*
+1. **Push.** The gate that was holding it — a security pass over the reconnect
+   rework — is done and recorded.
 2. **Bluetooth permission UX on the desktop** — the last real capability gap
-   between the two apps. iOS declares a usage description and turns a denial into
-   the exact Settings path; the desktop has no permission handling at all, so a
-   denial is indistinguishable from a grill that isn't switched on. *One DoD box.*
+   between the two apps. iOS declares a usage description and turns a denial
+   into the exact Settings path; the desktop has no permission handling at all,
+   so a denial is indistinguishable from a grill that isn't switched on.
+   *One DoD box.*
 3. **One cook with a 190° setpoint pick**, to settle whether `grillSetTemp`
    reports the accepted value or echoes the request — the single unverified
    assumption under the iOS ladder inference (ADR 0010). Every
-   `requested → reported` pair is already logged, so the cook just has to happen.
-   *One DoD box.*
+   `requested → reported` pair is already logged, so the cook just has to
+   happen. *One DoD box.*
 
-**Then:** the fresh-checkout build and README verification, and the clean-Mac
-packaged smoke test against a real grill (*the last two DoD boxes*) ·
-method-stage notifications on the desktop, which iOS already schedules ·
+**Then:** the clean-Mac packaged smoke test against a real grill (*the last DoD
+box*) · method-stage notifications on the desktop, which iOS already schedules ·
 interruption markers drawn on the desktop cook chart · calibrating the pellet
 feed-rate against a weighed hopper.
 

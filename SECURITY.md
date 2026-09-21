@@ -187,3 +187,68 @@ Two additions worth a note, neither of which widens the data surface.
 - **semgrep** (50 files): 0 findings. **gitleaks**: no leaks.
 
 Result: clean — no High/Critical introduced.
+
+### 2026-09-20 — pre-push pass over the whole unpushed branch
+The branch carried six commits and roughly two months of work — the native iOS
+app, the shared cooking knowledge base, the desktop cooking UI, and the BLE
+reconnect rework — none of it pushed. This pass covers all of it, with the
+reconnect work (transport code) as the reason it was owed.
+
+**Scanners.**
+- **gitleaks** (155 MB scanned): no leaks.
+- **osv-scanner**: 45 known vulnerabilities across 11 packages in 2 ecosystems
+  → **0**. See the dependency note below.
+- **npm audit**: 6 vulnerabilities (5 High, 1 Critical) → **0**.
+- **semgrep** (`--config auto`, scoped to `src/ scripts/ python/ ios/`): 6
+  findings, **all false positives** — analysed below.
+
+**semgrep's 6 path-traversal findings, and why none is real.** Every hit is
+`path.join(this.dir, …)` in `src/main/recorder.ts`. Four of them (`readCook`,
+the new `readCookEvents`, `deleteCook`, `renameCook`) are preceded on the
+immediately prior line by `isValidCookId(id)`, and `COOK_ID_RE` is
+`/^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}$/` — fully anchored, digits and dashes
+only, so neither `.` nor `/` can appear in a value that passes. The fifth
+(`startCook`) uses the recorder's own generated `cookId`, never an argument.
+The sixth (`metaFor`) takes filenames from `readdirSync` of the cooks directory
+itself. Recorded here rather than suppressed, so the next pass does not have to
+re-derive it.
+
+**Code review of the branch diff.** No findings at or above the reporting bar.
+What was specifically traced and cleared:
+- The **cook-id guard is applied consistently** on every path that builds a
+  filename from an id, including the newly added `readCookEvents`. iOS mirrors
+  it (`CookStore.isValidID`, funnelled through a single `url(for:)`).
+- **The two new IPC handlers take no arguments.** `pitboss:cooking` reads a
+  fixed `__dirname`-relative path; `pitboss:cooks:events` uses the recorder's
+  internal `cookId`. No renderer-supplied value reaches a filesystem path.
+- **No XSS.** Every `innerHTML` site in the renderer interpolates either an
+  `esc()`-wrapped string, a coerced number, or an internal class literal. All
+  attributes in template literals are double-quoted (checked), so `esc()` not
+  escaping `'` is not reachable. User-supplied cook names and probe labels
+  reach only `textContent` and `input.value`. A cook event's `note` is never
+  rendered. The CSP in `index.html` (`default-src 'self'`) blocks inline
+  handlers and remote script regardless.
+- **BLE payloads cannot inject JavaScript.** The per-model routines run on
+  JavaScriptCore, but the frame is passed as a **call argument**
+  (`fn.call(withArguments:)`), never concatenated into script source. The
+  `JSContext` has no host objects and no bridged Swift objects.
+- **No network surface on iOS at all** — no `URLSession`, no `WKWebView`, no
+  ATS exceptions. Nothing to bypass.
+- **The grill password is never logged** — only a slug and a hex command.
+- `scripts/stop.mjs` matches only command lines containing this project's
+  absolute root *and* `electron`, and uses `execFileSync` with argv arrays, so
+  there is no shell string to inject into.
+
+**Dependencies.** `aiohttp` 3.14.1 → 3.14.3 (PYSEC-2026-3545/3546/3547). `idna`
+was never pinned, so a fresh checkout could resolve to a vulnerable 3.9.0
+(PYSEC-2026-215) even though this machine's venv had floated to 3.18; it now
+carries a `>=3.15` floor. The 41 npm findings were all dev-only — the
+electron-builder toolchain (`tar`, `undici`, `@xmldom/xmldom`,
+`brace-expansion`, `fast-uri`, `js-yaml`) — and none ship inside the packaged
+app, but `npm audit fix` cleared them without touching a runtime dependency.
+Re-verified after the bump: sidecar imports resolve, the frozen binary rebuilds
+and runs with no external Python references, `npm test` green, `ios:interop`
+green.
+
+Result: **clean** — no High/Critical introduced, and every previously tracked
+dependency finding is closed.
