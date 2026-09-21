@@ -48,7 +48,8 @@ builds.
   shutdown, 0003 grill discovery & model selection, 0004 local-only storage,
   0005 frozen sidecar binary, 0006 native iOS app, 0007 sharing the cooking
   knowledge base, 0008 a cook is the food not the fire, 0009 the cooking
-  knowledge base, 0010 resolving grill capabilities — all ten Accepted
+  knowledge base, 0010 resolving grill capabilities, 0011 reporting a blocked
+  radio — all eleven Accepted
 - [x] Data storage & backup decided: data in `userData` (not the repo), app name
   pinned, local-only backup accepted for a grill controller (ADR 0004)
 - [x] Security passes run; findings fixed or accepted (SECURITY.md — 2026-07-19

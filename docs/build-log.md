@@ -17,6 +17,61 @@ skipped.
 
 ---
 
+## 2026-09-20 — Pre-push cleanup, and the permission screen that was never written
+
+Two months of work had been sitting uncommitted since July — the entire iOS
+app, the shared cooking knowledge base, the desktop cooking UI. It went in as
+eight commits, then the branch was taken through the gate it had never passed.
+
+**Every known dependency CVE closed.** osv-scanner went from 45 findings across
+11 packages to zero. `aiohttp` 3.14.1 → 3.14.3. `idna` was the interesting one:
+never pinned at all, so the scanner resolved it transitively to a vulnerable
+3.9.0 while the working `.venv` had long since floated to 3.18 — the risk was
+never on this machine, it was on a fresh checkout. It carries a `>=3.15` floor
+now. The 41 npm findings were all dev-only toolchain and cleared without
+touching a runtime dependency.
+
+Then the same mistake, committed by the fix: a new `requirements-dev.txt`
+declared `Pillow>=11.0`, and a floor is exactly what a scanner resolves, so that
+reintroduced seven findings up to 8.7. Caught only by **rescanning after the
+change instead of trusting the earlier clean result**.
+
+**A security pass over the whole branch.** Clean. semgrep's six path-traversal
+hits are written up in `SECURITY.md` rather than suppressed — all six are
+`path.join` in the recorder, four guarded on the immediately preceding line by
+`isValidCookId`, whose regex is anchored to digits and dashes so no `.` or `/`
+survives it. A suppression comment records a conclusion; the write-up records
+the reasoning, so the next pass doesn't re-derive it.
+
+**The fresh-checkout claim, tested by actually doing it.** Cloning clean and
+following the README failed twice: `npm run icon` called a bare `python` that
+modern macOS does not provide — `scripts/setup.mjs` already knew this and probes
+for `python3`, so the inconsistency was in `package.json` alone — and nothing
+installed the Pillow that `make_icon.py` imports.
+
+**The Bluetooth permission screen** (ADR 0011), and a chain of four defects that
+only running the app could have surfaced:
+
+1. **No banner at all.** The one-shot event was being wiped seconds later by the
+   real sidecar's next `not_found`. Pushing one message is not simulating a
+   blocked radio; a blocked radio cannot report `not_found` *at all*.
+2. **The button stretched across the entire window** — `.btn` is `flex: 1`, for
+   the toolbar row where buttons share width evenly.
+3. Fixing that exposed something much older: **`.btn-save` sat ~100 lines above
+   `.btn`** in the stylesheet, and both are one class deep, so `.btn`'s own
+   background won on source order. Every primary button in the app — the
+   wizard's "Scan for grills" included — had been quietly rendering grey.
+4. Which exposed the bug that grey had been **masking**: with primary buttons
+   finally filled, their hardcoded `#1a1208` label sat on the light theme's much
+   darker `--flame` at **3.45:1**, under the 4.5:1 AA floor. Now an `--on-flame`
+   token, and `check-contrast` grew a category for labels on accent fills —
+   pairs the surface checks structurally could not see.
+
+Each of those was found by the fix before it. None was visible in a clean build,
+and the app compiled perfectly at every step.
+
+---
+
 ## 2026-09-19 — Recovery after a disconnect (iOS)
 
 The retry ladder had **never once** recovered a dropped link. Every recovery in
