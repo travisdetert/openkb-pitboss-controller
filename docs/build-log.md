@@ -70,6 +70,50 @@ only running the app could have surfaced:
 Each of those was found by the fix before it. None was visible in a clean build,
 and the app compiled perfectly at every step.
 
+### Later that day — what "build" actually meant
+
+"Does it build?" had meant `tsc` for this project, and the packaged app had not
+been produced since July while two months of code landed on top of it. Building
+both for real: the Electron bundle packages (288M, sidecar frozen inside with no
+external Python references, runs from the bundle) and `xcodebuild` reports BUILD
+SUCCEEDED with no code warnings. Both were fine — but nothing in the tooling
+could have said so, which was the actual problem.
+
+The check that mattered was not the exit code: it was confirming that
+`PBProtocol.js` — the Bluetooth guidance written hours earlier — was genuinely
+*inside* the asar rather than merely on disk. That is the difference between a
+feature existing and a feature shipping.
+
+So packaging became a gate rather than an assumption: `/ship-check` now runs the
+real packaging command per claimed platform and inspects the artifact, and the
+harness `doctor` gained a fast staleness check for declared distributables.
+
+### And a doctor, so a broken thing says why
+
+`npm run doctor` — ~3s, ten checks, `.health.json`. Four are specific to this
+project and each one is a question that has bitten it: the frozen sidecar has no
+load path escaping the bundle (ADR-0005's first attempt shipped a venv that
+worked only on the dev machine); the iOS conformance vectors have been run since
+the Swift last changed; the screenshots still match the UI; a clean stop path
+exists.
+
+It proved its own point immediately. The first run reported "Screenshots: none
+captured" and skipped the iOS check — both false, six PNGs and the whole Swift
+package sitting right there. The helper used `require()` inside an ESM module,
+which threw, was swallowed by a `catch`, and returned 0; the checks faithfully
+reported the lie. **A check that lies is worse than no check**, so the comment
+explaining it stays in the file.
+
+It also surfaced a gap it cannot fix: this project has no linter. That is
+recorded as SKIPPED rather than quietly passed.
+
+The runner itself is vendored from the harness, which is the wrong home for it —
+377 lines of duplication, and only `health.config.mjs` genuinely belongs to this
+project. The obstacle is small and specific: the runner resolves its root from
+its own file location, so one shared copy would check the harness directory
+instead of the caller's. Fixing that is harness work, so the duplication stays
+recorded rather than quietly accepted.
+
 ---
 
 ## 2026-09-19 — Recovery after a disconnect (iOS)
