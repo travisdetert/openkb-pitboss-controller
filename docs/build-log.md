@@ -107,12 +107,17 @@ explaining it stays in the file.
 It also surfaced a gap it cannot fix: this project has no linter. That is
 recorded as SKIPPED rather than quietly passed.
 
-The runner itself is vendored from the harness, which is the wrong home for it —
-377 lines of duplication, and only `health.config.mjs` genuinely belongs to this
-project. The obstacle is small and specific: the runner resolves its root from
-its own file location, so one shared copy would check the harness directory
-instead of the caller's. Fixing that is harness work, so the duplication stays
-recorded rather than quietly accepted.
+The runner was initially vendored here — 377 lines of a harness capability
+copied into a project that should only own `health.config.mjs`. The obstacle to
+sharing it was small and specific: the runner resolved its root from its own
+file location, so one shared copy would examine the harness directory instead of
+the caller's.
+
+That got fixed rather than accepted. `ROOT` is now the caller's working
+directory, the runner lives once in the harness and is linked to
+`~/.claude/doctor.mjs`, and this project's `package.json` points at it. The
+duplicate is deleted. What stays here is `health.config.mjs`, which is the part
+that was ever project-specific.
 
 ---
 

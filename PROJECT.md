@@ -131,9 +131,6 @@ builds.
   a pre-cook checklist, anomaly detection, and lock-screen notifications
 - [x] The setpoint ladder is resolved without a model number (ADR 0010) —
   candidates eliminated from what the grill itself accepts or refuses
-- [ ] The ladder inference's one unverified assumption is settled: whether
-  `grillSetTemp` reports the accepted value or echoes the request. Every
-  `requested → reported` pair is logged; one cook with a 190° pick decides it
 
 ## Now / Next
 
@@ -156,29 +153,32 @@ the shipped bundle's currency, that the frozen sidecar has no load paths
 escaping it, that the iOS conformance vectors have been run since the Swift
 last changed, and that the screenshots still match the UI.
 
-**Definition of Done: 34/37.** The three that remain cannot be closed at a
+**Definition of Done: 34/36.** The two that remain cannot be closed at a
 keyboard, and are not bookkeeping:
 
-1. **One cook with a 190° setpoint pick** — settles whether `grillSetTemp`
-   reports the accepted value or echoes the request, the single unverified
-   assumption under the iOS ladder inference (ADR 0010). Every
-   `requested → reported` pair is already logged, so the cook just has to happen.
-2. **The packaged app smoke-tested on a clean Mac against a real grill** —
+1. **The packaged app smoke-tested on a clean Mac against a real grill** —
    needs a second machine; everything verifiable on this one has been.
-3. **A real `tccutil reset Bluetooth`** — the permission UI is verified in both
+2. **A real `tccutil reset Bluetooth`** — the permission UI is verified in both
    themes, but the detection branch itself has only run under simulation.
 
 **Known gaps, accepted and recorded rather than hidden:**
+- **The ladder inference's assumption is accepted unverified** (was a DoD bar,
+  dropped 2026-09-20 as not worth a cook). `LadderInference` assumes
+  `grillSetTemp` reports the value the grill *accepted* rather than echoing what
+  was requested. If that is wrong, the inferred ladder can keep a setpoint the
+  grill silently rounded — the failure is a wrong number in the picker, not a
+  runaway fire, which is why it is affordable to leave open. Every
+  `requested → reported` pair is still logged, so a normal cook will answer it
+  eventually without anyone setting out to test it.
 - **No linter.** `tsc --noEmit` is clean and strict, which covers the type-level
   bugs; `npm run doctor` reports `lint` as SKIPPED rather than pretending
   otherwise.
-- **`scripts/doctor.mjs` is a vendored copy** of a harness capability (377
-  lines), not something this project owns. It works and has zero dependencies,
-  but the runner belongs in the harness with only `health.config.mjs` — this
-  project's own declaration of what healthy means — living here. Moving it needs
-  a change on the harness side (the runner resolves its root from its own
-  location, so a shared copy would check the wrong directory), so it is left
-  duplicated deliberately, with the source named in the file header.
+- ~~The doctor is vendored here.~~ **Fixed 2026-09-20.** The runner resolved its
+  root from its own file location, so each project had to carry its own ~380-line
+  copy. It now resolves from the caller's directory, lives once in the harness
+  (linked to `~/.claude/doctor.mjs` by `install.sh`), and this project keeps only
+  `health.config.mjs` — its own declaration of what healthy means, which is the
+  part that genuinely belongs here.
 
 **Later:** cross-platform packaging (Windows/Linux), a signed and notarized macOS
 build, cook-history viewer polish, and a TestFlight or App Store decision for iOS.

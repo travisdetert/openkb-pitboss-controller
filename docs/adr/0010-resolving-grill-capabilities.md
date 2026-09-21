@@ -75,3 +75,14 @@ files store the raw value, so an old cook still means what it meant.
   hardware. If it echoes requests, nothing is ever eliminated and the default
   stands — which is the current behaviour anyway, so the failure mode is "no
   worse".
+
+## Accepted unverified — 2026-09-20
+This ADR's elimination depends on `grillSetTemp` reporting the value the grill
+**accepted**, not echoing the value requested. That was never confirmed on
+hardware, and the deliberate decision is to stop treating it as a release bar:
+proving it needs a cook staged around a 190° pick, and the consequence of being
+wrong is a wrong number in the setpoint picker rather than an unsafe grill.
+
+Every `requested → reported` pair is logged, so ordinary use will settle it
+without a test being staged. Recorded here so the assumption stays visible
+instead of disappearing with the checklist item.
